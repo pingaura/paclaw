@@ -49,3 +49,61 @@ export interface TeamStatusResponse {
 export interface TeamActivityResponse {
   items: RestActivityItem[];
 }
+
+// ---- Abhiyan: Project & Task Management ----
+
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done';
+export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
+export type ProjectStatus = 'active' | 'paused' | 'completed' | 'archived';
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assignedAgents: string[];
+  pipelineStage: number | null;
+  createdAt: number;
+  updatedAt: number;
+  completedAt: number | null;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  status: ProjectStatus;
+  color: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Project with its tasks loaded (frontend-only, assembled from separate API calls) */
+export interface ProjectWithTasks extends Project {
+  tasks: Task[];
+}
+
+export interface ProjectIndex {
+  id: string;
+  name: string;
+  status: ProjectStatus;
+  color: string;
+  taskCount: number;
+  updatedAt: number;
+}
+
+export interface CreateProjectInput {
+  name: string;
+  description: string;
+  color: string;
+}
+
+export interface CreateTaskInput {
+  title: string;
+  description: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assignedAgents: string[];
+  pipelineStage: number | null;
+}

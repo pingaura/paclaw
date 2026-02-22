@@ -1,4 +1,4 @@
-import type { AgentMeta } from './types';
+import type { AgentMeta, TaskPriority } from './types';
 
 export const AGENTS: AgentMeta[] = [
   {
@@ -80,3 +80,23 @@ export const PIPELINE_STAGES = [
 ];
 
 export const AGENT_MAP = new Map(AGENTS.map((a) => [a.id, a]));
+
+export const TASK_COLUMNS = [
+  { status: 'backlog' as const, label: 'Backlog', color: '#64748b' },
+  { status: 'todo' as const, label: 'To Do', color: '#a78bfa' },
+  { status: 'in_progress' as const, label: 'In Progress', color: '#60a5fa' },
+  { status: 'review' as const, label: 'Review', color: '#fbbf24' },
+  { status: 'done' as const, label: 'Done', color: '#34d399' },
+];
+
+export const PRIORITY_COLORS: Record<TaskPriority, string> = {
+  low: '#94a3b8',
+  medium: '#60a5fa',
+  high: '#fb923c',
+  critical: '#ef4444',
+};
+
+export const PROJECT_COLORS = [
+  '#60a5fa', '#a78bfa', '#34d399', '#fb923c',
+  '#f87171', '#fbbf24', '#e879f9', '#22d3ee',
+];

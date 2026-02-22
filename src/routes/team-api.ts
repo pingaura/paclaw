@@ -156,4 +156,8 @@ teamApi.get('/activity', async (c) => {
   return c.json({ items });
 });
 
+// Mount project management sub-routes
+import { projectsApi } from './projects-api';
+teamApi.route('/projects', projectsApi);
+
 export { teamApi };

@@ -1,7 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useTeamStatus } from './hooks/useTeamStatus';
-import AgentGrid from './components/AgentGrid';
+import { useProjects } from './hooks/useProjects';
+import AgentStatusBar from './components/AgentStatusBar';
+import ProjectSidebar from './components/ProjectSidebar';
+import ProjectHeader from './components/ProjectHeader';
+import TaskBoard from './components/TaskBoard';
 import PipelineView from './components/PipelineView';
 import ActivityFeed from './components/ActivityFeed';
 import ConnectionStatus from './components/ConnectionStatus';
@@ -11,13 +15,18 @@ import './TeamApp.css';
 export default function TeamApp() {
   const { connected, wsError, activities: wsActivities, agentStates } = useWebSocket();
   const { status, restActivities, error, loading } = useTeamStatus();
+  const {
+    projects, activeProject,
+    selectProject, createProject, createTask, updateTask, moveTask, deleteTask,
+  } = useProjects();
+
+  const [activityOpen, setActivityOpen] = useState(true);
 
   // Merge REST activities with WS activities (dedup by id)
   const allActivities = useMemo<ActivityItem[]>(() => {
     const seen = new Set<string>();
     const merged: ActivityItem[] = [];
 
-    // REST activities first (older)
     for (const item of restActivities) {
       if (!seen.has(item.id)) {
         seen.add(item.id);
@@ -25,7 +34,6 @@ export default function TeamApp() {
       }
     }
 
-    // WS activities on top (newer, real-time)
     for (const item of wsActivities) {
       if (!seen.has(item.id)) {
         seen.add(item.id);
@@ -40,32 +48,70 @@ export default function TeamApp() {
   const gatewayOk = status?.gateway?.ok ?? false;
 
   return (
-    <div className="team-app">
-      <header className="team-header">
-        <div className="team-header-left">
-          <img src="/logo-small.png" alt="Moltworker" className="header-logo" />
-          <h1>Team Dashboard</h1>
-        </div>
-        <div className="team-header-right">
+    <div className="abhiyan">
+      {/* Top bar: branding + agent status + connection */}
+      <header className="ab-header">
+        <div className="ab-header-left">
+          <img src="/logo-small.png" alt="Nakhayantram" className="header-logo" />
+          <h1 className="ab-brand">Abhiyan</h1>
           <div className={`gateway-badge ${gatewayOk ? 'gateway-ok' : 'gateway-down'}`}>
             Gateway: {loading ? '...' : gatewayOk ? 'Running' : 'Down'}
           </div>
           <ConnectionStatus connected={connected} error={wsError} />
         </div>
+        <AgentStatusBar agentStates={agentStates} />
       </header>
 
-      <main className="team-main">
-        {error && <div className="team-error">{error}</div>}
-        {!loading && !error && !gatewayOk && (
-          <div className="team-warning">Gateway is not running. Agent activity will be unavailable.</div>
-        )}
-        {wsError && (
-          <div className="team-warning">Live connection failed: {wsError}</div>
-        )}
-        <AgentGrid agentStates={agentStates} />
+      {/* Alerts */}
+      {error && <div className="team-error ab-alert">{error}</div>}
+      {!loading && !error && !gatewayOk && (
+        <div className="team-warning ab-alert">Gateway is not running. Agent activity will be unavailable.</div>
+      )}
+      {wsError && <div className="team-warning ab-alert">Live connection failed: {wsError}</div>}
+
+      {/* Main body: sidebar + content + activity */}
+      <div className="ab-body">
+        <ProjectSidebar
+          projects={projects}
+          activeId={activeProject?.id}
+          onSelect={selectProject}
+          onCreate={createProject}
+        />
+
+        <main className="ab-main">
+          {activeProject ? (
+            <>
+              <ProjectHeader project={activeProject} />
+              <TaskBoard
+                tasks={activeProject.tasks}
+                onCreateTask={createTask}
+                onUpdateTask={updateTask}
+                onMoveTask={moveTask}
+                onDeleteTask={deleteTask}
+              />
+            </>
+          ) : (
+            <div className="ab-empty">
+              <div className="ab-empty-icon">&#x1F3AF;</div>
+              <h2>Welcome to Abhiyan</h2>
+              <p>Select or create a project to get started</p>
+            </div>
+          )}
+        </main>
+
+        {/* Collapsible activity panel */}
+        <div className={`ab-activity-panel ${activityOpen ? 'ab-activity-open' : 'ab-activity-closed'}`}>
+          <button className="ab-activity-toggle" onClick={() => setActivityOpen(!activityOpen)}>
+            {activityOpen ? '\u276F' : '\u276E'}
+          </button>
+          {activityOpen && <ActivityFeed activities={allActivities} />}
+        </div>
+      </div>
+
+      {/* Pipeline at the bottom */}
+      <div className="ab-pipeline">
         <PipelineView agentStates={agentStates} />
-        <ActivityFeed activities={allActivities} />
-      </main>
+      </div>
     </div>
   );
 }
