@@ -220,6 +220,28 @@ if (process.env.CF_AI_GATEWAY_MODEL) {
     }
 }
 
+// Default model based on env vars (self-heal stale R2 configs)
+// Only applies when CF_AI_GATEWAY_MODEL is NOT set (gateway override takes priority)
+if (!process.env.CF_AI_GATEWAY_MODEL) {
+    if (process.env.OPENAI_API_KEY) {
+        config.models = config.models || {};
+        config.models.providers = config.models.providers || {};
+        config.models.providers.openai = {
+            api: 'openai-completions',
+            models: [{ id: 'gpt-4o', name: 'GPT-4o', contextWindow: 128000, maxTokens: 16384 }],
+        };
+        config.agents = config.agents || {};
+        config.agents.defaults = config.agents.defaults || {};
+        config.agents.defaults.model = { primary: 'openai/gpt-4o' };
+        console.log('Default model set to openai/gpt-4o (from OPENAI_API_KEY)');
+    } else if (process.env.ANTHROPIC_API_KEY) {
+        config.agents = config.agents || {};
+        config.agents.defaults = config.agents.defaults || {};
+        config.agents.defaults.model = { primary: 'anthropic/claude-sonnet-4-5' };
+        console.log('Default model set to anthropic/claude-sonnet-4-5 (from ANTHROPIC_API_KEY)');
+    }
+}
+
 // Telegram configuration
 // Overwrite entire channel object to drop stale keys from old R2 backups
 // that would fail OpenClaw's strict config validation (see #47)
