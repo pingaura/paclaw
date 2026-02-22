@@ -254,6 +254,7 @@ if (!process.env.CF_AI_GATEWAY_MODEL) {
         config.models = config.models || {};
         config.models.providers = config.models.providers || {};
         config.models.providers.openai = {
+            baseUrl: 'https://api.openai.com/v1',
             api: 'openai-completions',
             models: [{ id: 'gpt-4o', name: 'GPT-4o', contextWindow: 128000, maxTokens: 16384 }],
         };
