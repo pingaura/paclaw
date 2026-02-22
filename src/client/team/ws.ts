@@ -129,7 +129,7 @@ export class TeamWebSocket {
           id: 'openclaw-control-ui',
           displayName: 'Team Dashboard',
           version: '1.0.0',
-          mode: 'webchat',
+          mode: 'ui',
           platform: 'web',
         },
         role: 'operator',
