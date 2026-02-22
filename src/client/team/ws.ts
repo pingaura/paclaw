@@ -1,6 +1,11 @@
 import type { ActivityItem } from './types';
 import { AGENT_MAP } from './constants';
 
+// Word-boundary regex per agent to avoid false positives (e.g. "message" matching "sage")
+const AGENT_PATTERNS = new Map(
+  [...AGENT_MAP.keys()].map((id) => [id, new RegExp(`\\b${id}\\b`, 'i')])
+);
+
 export type WsMessageHandler = (activity: ActivityItem) => void;
 export type WsConnectionHandler = (connected: boolean) => void;
 
@@ -116,23 +121,21 @@ export class TeamWebSocket {
     const to = (params.to as string) || '';
     const method = (msg.method as string) || '';
 
-    // Check if 'from' or 'to' matches a known agent
-    const fromLower = from.toLowerCase();
-    const toLower = to.toLowerCase();
+    // Check if 'from' or 'to' matches a known agent (word-boundary match)
     let agentId: string | null = null;
 
-    for (const [id] of AGENT_MAP) {
-      if (fromLower.includes(id) || toLower.includes(id)) {
+    for (const [id, regex] of AGENT_PATTERNS) {
+      if (regex.test(from) || regex.test(to)) {
         agentId = id;
         break;
       }
     }
 
-    // Also check in message content
+    // Also check in full message content
     if (!agentId) {
-      const content = JSON.stringify(msg).toLowerCase();
-      for (const [id] of AGENT_MAP) {
-        if (content.includes(id)) {
+      const content = JSON.stringify(msg);
+      for (const [id, regex] of AGENT_PATTERNS) {
+        if (regex.test(content)) {
           agentId = id;
           break;
         }

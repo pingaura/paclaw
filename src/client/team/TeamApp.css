@@ -449,6 +449,7 @@
 }
 
 .activity-summary {
+  flex: 1;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
