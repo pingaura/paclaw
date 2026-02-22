@@ -40,6 +40,7 @@
 		"command": "npm run build",
 	},
 	// Container configuration for the Moltbot sandbox
+	// instance_type: standard-1 = 0.5 vCPU, 4 GiB, 8 GB disk. Use standard-2 (1 vCPU, 6 GiB) or standard-3 (2 vCPU, 8 GiB) if you need more.
 	"containers": [
 		{
 			"class_name": "Sandbox",
