@@ -16,7 +16,7 @@ export interface WsStatus {
 }
 
 // Close reasons that indicate permanent rejection — no point retrying
-const PERMANENT_REJECTIONS = ['pairing required', 'gateway token', 'unauthorized', 'invalid connect params', 'must be equal to constant'];
+const PERMANENT_REJECTIONS = ['pairing required', 'gateway token', 'unauthorized', 'invalid connect params', 'must be equal to constant', 'protocol mismatch'];
 
 export class TeamWebSocket {
   private ws: WebSocket | null = null;
@@ -123,13 +123,13 @@ export class TeamWebSocket {
       id: `team-${++this.messageId}`,
       method: 'connect',
       params: {
-        minProtocol: 1,
-        maxProtocol: 1,
+        minProtocol: 2,
+        maxProtocol: 2,
         client: {
-          id: 'openclaw-control-ui',
+          id: 'webchat-ui',
           displayName: 'Team Dashboard',
           version: '1.0.0',
-          mode: 'ui',
+          mode: 'webchat',
           platform: 'web',
         },
         role: 'operator',
