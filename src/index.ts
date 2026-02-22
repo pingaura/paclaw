@@ -27,7 +27,7 @@ import type { AppEnv, MoltbotEnv } from './types';
 import { MOLTBOT_PORT } from './config';
 import { createAccessMiddleware } from './auth';
 import { ensureMoltbotGateway, findExistingMoltbotProcess } from './gateway';
-import { publicRoutes, api, adminUi, debug, cdp } from './routes';
+import { publicRoutes, api, adminUi, teamUi, teamApi, debug, cdp } from './routes';
 import { redactSensitiveParams } from './utils/logging';
 import loadingPageHtml from './assets/loading.html';
 import configErrorHtml from './assets/config-error.html';
@@ -208,11 +208,17 @@ app.use('*', async (c, next) => {
   return middleware(c, next);
 });
 
+// Mount Team Dashboard API routes (protected by Cloudflare Access)
+app.route('/api/team', teamApi);
+
 // Mount API routes (protected by Cloudflare Access)
 app.route('/api', api);
 
 // Mount Admin UI routes (protected by Cloudflare Access)
 app.route('/_admin', adminUi);
+
+// Mount Team Dashboard UI routes (protected by Cloudflare Access)
+app.route('/_team', teamUi);
 
 // Mount debug routes (protected by Cloudflare Access, only when DEBUG_ROUTES is enabled)
 app.use('/debug/*', async (c, next) => {

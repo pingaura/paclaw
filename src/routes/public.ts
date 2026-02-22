@@ -67,4 +67,13 @@ publicRoutes.get('/_admin/assets/*', async (c) => {
   return c.env.ASSETS.fetch(new Request(assetUrl.toString(), c.req.raw));
 });
 
+// GET /_team/assets/* - Team Dashboard static assets
+// Rewrite to /_admin/assets/* since Vite builds both apps with base /_admin/
+publicRoutes.get('/_team/assets/*', async (c) => {
+  const url = new URL(c.req.url);
+  const assetPath = url.pathname.replace('/_team/assets/', '/assets/');
+  const assetUrl = new URL(assetPath, url.origin);
+  return c.env.ASSETS.fetch(new Request(assetUrl.toString(), c.req.raw));
+});
+
 export { publicRoutes };
