@@ -253,12 +253,13 @@ if (process.env.DISCORD_BOT_TOKEN) {
 }
 
 // Slack configuration
+// Merge into existing config to preserve UI-configured settings (actions, accounts, etc.)
 if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN) {
-    config.channels.slack = {
+    config.channels.slack = Object.assign({}, config.channels.slack || {}, {
         botToken: process.env.SLACK_BOT_TOKEN,
         appToken: process.env.SLACK_APP_TOKEN,
         enabled: true,
-    };
+    });
 }
 
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
