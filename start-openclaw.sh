@@ -223,6 +223,33 @@ if (process.env.CF_AI_GATEWAY_MODEL) {
 // Default model based on env vars (self-heal stale R2 configs)
 // Only applies when CF_AI_GATEWAY_MODEL is NOT set (gateway override takes priority)
 if (!process.env.CF_AI_GATEWAY_MODEL) {
+    // Remove stale gateway providers that no longer have valid env vars
+    if (config.models && config.models.providers) {
+        const staleProviders = Object.keys(config.models.providers).filter(p =>
+            p.startsWith('cf-ai-gw-') || p === 'cloudflare-ai-gateway'
+        );
+        staleProviders.forEach(p => {
+            delete config.models.providers[p];
+            console.log('Removed stale provider: ' + p);
+        });
+    }
+    // Remove stale auth profiles
+    if (config.auth && config.auth.profiles) {
+        const staleProfiles = Object.keys(config.auth.profiles).filter(p =>
+            p.startsWith('cloudflare-ai-gateway')
+        );
+        staleProfiles.forEach(p => {
+            delete config.auth.profiles[p];
+        });
+    }
+    // Remove stale model aliases
+    if (config.agents && config.agents.defaults && config.agents.defaults.models) {
+        const staleAliases = Object.keys(config.agents.defaults.models).filter(k =>
+            k.startsWith('cf-ai-gw-') || k.startsWith('cloudflare-ai-gateway')
+        );
+        staleAliases.forEach(k => delete config.agents.defaults.models[k]);
+    }
+
     if (process.env.OPENAI_API_KEY) {
         config.models = config.models || {};
         config.models.providers = config.models.providers || {};
