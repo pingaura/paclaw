@@ -30,7 +30,7 @@ export default function AgentCard({ meta, state }: AgentCardProps) {
       </div>
 
       <div className="agent-card-body">
-        <div className="agent-model">{meta.model.replace('claude-', '').replace('-20250514', '')}</div>
+        <div className="agent-model">{meta.model}</div>
 
         {state.currentTask && (
           <div className="agent-task" title={state.currentTask}>
