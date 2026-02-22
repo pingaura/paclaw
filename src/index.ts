@@ -234,25 +234,24 @@ app.all('*', async (c) => {
 
   console.log('[PROXY] Handling request:', url.pathname);
 
-  // Check if gateway is already running
+  // If we have any gateway process (starting or running), wait for it; only show loading when none exists.
+  // Using only status === 'running' caused every request while a process was "starting" to serve loading
+  // and start another gateway → many duplicate starts and exitCode 1 (address already in use).
   const existingProcess = await findExistingMoltbotProcess(sandbox);
-  const isGatewayReady = existingProcess !== null && existingProcess.status === 'running';
+  const hasGatewayProcess = existingProcess !== null;
 
-  // For browser requests (non-WebSocket, non-API), show loading page if gateway isn't ready
   const isWebSocketRequest = request.headers.get('Upgrade')?.toLowerCase() === 'websocket';
   const acceptsHtml = request.headers.get('Accept')?.includes('text/html');
 
-  if (!isGatewayReady && !isWebSocketRequest && acceptsHtml) {
-    console.log('[PROXY] Gateway not ready, serving loading page');
+  if (!hasGatewayProcess && !isWebSocketRequest && acceptsHtml) {
+    console.log('[PROXY] No gateway process yet, serving loading page');
 
-    // Start the gateway in the background (don't await)
     c.executionCtx.waitUntil(
       ensureMoltbotGateway(sandbox, c.env).catch((err: Error) => {
         console.error('[PROXY] Background gateway start failed:', err);
       }),
     );
 
-    // Return the loading page immediately
     return c.html(loadingPageHtml);
   }
 

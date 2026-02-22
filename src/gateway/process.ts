@@ -13,6 +13,9 @@ import { ensureRcloneConfig } from './r2';
 export async function findExistingMoltbotProcess(sandbox: Sandbox): Promise<Process | null> {
   try {
     const processes = await sandbox.listProcesses();
+    let best: Process | null = null;
+    let bestStartTime = 0;
+
     for (const proc of processes) {
       // Match gateway process (openclaw gateway or legacy clawdbot gateway)
       // Don't match CLI commands like "openclaw devices list"
@@ -31,10 +34,15 @@ export async function findExistingMoltbotProcess(sandbox: Sandbox): Promise<Proc
 
       if (isGatewayProcess && !isCliCommand) {
         if (proc.status === 'starting' || proc.status === 'running') {
-          return proc;
+          const t = proc.startTime ? new Date(proc.startTime).getTime() : 0;
+          if (t > bestStartTime) {
+            best = proc;
+            bestStartTime = t;
+          }
         }
       }
     }
+    return best;
   } catch (e) {
     console.log('Could not list processes:', e);
   }
@@ -85,6 +93,19 @@ export async function ensureMoltbotGateway(sandbox: Sandbox, env: MoltbotEnv): P
       } catch (killError) {
         console.log('Failed to kill process:', killError);
       }
+    }
+  }
+
+  // Re-check: another request may have just started a gateway (reduces duplicate starts).
+  const recheckProcess = await findExistingMoltbotProcess(sandbox);
+  if (recheckProcess) {
+    console.log('Found gateway process on re-check:', recheckProcess.id);
+    try {
+      await recheckProcess.waitForPort(MOLTBOT_PORT, { mode: 'tcp', timeout: STARTUP_TIMEOUT_MS });
+      console.log('Gateway is reachable');
+      return recheckProcess;
+    } catch (e) {
+      console.log('Re-checked process not reachable, starting new one:', e);
     }
   }
 
