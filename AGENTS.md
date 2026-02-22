@@ -140,6 +140,16 @@ Browser
 | `start-openclaw.sh` | Startup script: R2 restore → onboard → config patch → launch gateway |
 | `wrangler.jsonc` | Cloudflare Worker + Container configuration |
 
+### Container sizing
+
+Set `instance_type` in `wrangler.jsonc` under `containers[0]`:
+
+- **standard-1** (0.5 vCPU, 4 GiB, 8 GB disk): Gateway only, light usage.
+- **standard-2** (1 vCPU, 6 GiB, 12 GB disk): Recommended when the sandbox has **git**, **project code**, or **headless Chrome** for testing (more disk and memory).
+- **standard-3** (2 vCPU, 8 GiB, 16 GB disk): Multiple Chrome tabs or many concurrent sessions.
+
+CDP/browser automation can use Cloudflare Browser Rendering (Chrome runs outside the container) or in-container Chromium; in-container needs more resources.
+
 ## Local Development
 
 ```bash
