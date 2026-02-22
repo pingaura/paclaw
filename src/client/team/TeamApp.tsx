@@ -9,7 +9,7 @@ import type { ActivityItem } from './types';
 import './TeamApp.css';
 
 export default function TeamApp() {
-  const { connected, activities: wsActivities, agentStates } = useWebSocket();
+  const { connected, wsError, activities: wsActivities, agentStates } = useWebSocket();
   const { status, restActivities, error, loading } = useTeamStatus();
 
   // Merge REST activities with WS activities (dedup by id)
@@ -50,7 +50,7 @@ export default function TeamApp() {
           <div className={`gateway-badge ${gatewayOk ? 'gateway-ok' : 'gateway-down'}`}>
             Gateway: {loading ? '...' : gatewayOk ? 'Running' : 'Down'}
           </div>
-          <ConnectionStatus connected={connected} />
+          <ConnectionStatus connected={connected} error={wsError} />
         </div>
       </header>
 
@@ -58,6 +58,9 @@ export default function TeamApp() {
         {error && <div className="team-error">{error}</div>}
         {!loading && !error && !gatewayOk && (
           <div className="team-warning">Gateway is not running. Agent activity will be unavailable.</div>
+        )}
+        {wsError && (
+          <div className="team-warning">Live connection failed: {wsError}</div>
         )}
         <AgentGrid agentStates={agentStates} />
         <PipelineView agentStates={agentStates} />

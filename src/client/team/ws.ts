@@ -7,7 +7,16 @@ const AGENT_PATTERNS = new Map(
 );
 
 export type WsMessageHandler = (activity: ActivityItem) => void;
-export type WsConnectionHandler = (connected: boolean) => void;
+export type WsStatusHandler = (status: WsStatus) => void;
+
+export interface WsStatus {
+  connected: boolean;
+  /** Non-null when permanently rejected (won't auto-reconnect) */
+  error: string | null;
+}
+
+// Close reasons that indicate permanent rejection — no point retrying
+const PERMANENT_REJECTIONS = ['pairing required', 'gateway token', 'unauthorized'];
 
 export class TeamWebSocket {
   private ws: WebSocket | null = null;
@@ -17,13 +26,13 @@ export class TeamWebSocket {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private messageId = 0;
   private onMessage: WsMessageHandler;
-  private onConnection: WsConnectionHandler;
+  private onStatus: WsStatusHandler;
   private disposed = false;
 
-  constructor(url: string, onMessage: WsMessageHandler, onConnection: WsConnectionHandler) {
+  constructor(url: string, onMessage: WsMessageHandler, onStatus: WsStatusHandler) {
     this.url = url;
     this.onMessage = onMessage;
-    this.onConnection = onConnection;
+    this.onStatus = onStatus;
   }
 
   connect(): void {
@@ -42,7 +51,7 @@ export class TeamWebSocket {
 
     this.ws.onopen = () => {
       this.reconnectDelay = 1000;
-      this.onConnection(true);
+      this.onStatus({ connected: true, error: null });
       this.sendConnectFrame();
     };
 
@@ -50,6 +59,18 @@ export class TeamWebSocket {
       if (typeof event.data !== 'string') return;
       try {
         const parsed = JSON.parse(event.data);
+
+        // Check for error responses from the gateway (e.g. pairing required)
+        if (parsed.error?.message) {
+          const errMsg = parsed.error.message as string;
+          if (this.isPermanentRejection(errMsg)) {
+            this.onStatus({ connected: false, error: errMsg });
+            this.disposed = true;
+            this.ws?.close();
+            return;
+          }
+        }
+
         const activity = this.parseMessage(parsed);
         if (activity) {
           this.onMessage(activity);
@@ -59,13 +80,22 @@ export class TeamWebSocket {
       }
     };
 
-    this.ws.onclose = () => {
-      this.onConnection(false);
+    this.ws.onclose = (event) => {
+      const reason = event.reason || '';
+
+      // If the gateway gave a permanent rejection reason, stop reconnecting
+      if (this.isPermanentRejection(reason)) {
+        this.onStatus({ connected: false, error: reason });
+        this.disposed = true;
+        return;
+      }
+
+      this.onStatus({ connected: false, error: null });
       this.scheduleReconnect();
     };
 
     this.ws.onerror = () => {
-      this.onConnection(false);
+      // onerror is always followed by onclose, so don't duplicate logic here
     };
   }
 
@@ -79,6 +109,11 @@ export class TeamWebSocket {
       this.ws.close();
       this.ws = null;
     }
+  }
+
+  private isPermanentRejection(message: string): boolean {
+    const lower = message.toLowerCase();
+    return PERMANENT_REJECTIONS.some((r) => lower.includes(r));
   }
 
   private sendConnectFrame(): void {

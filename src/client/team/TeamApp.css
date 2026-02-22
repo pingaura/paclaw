@@ -130,6 +130,10 @@
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
 
+.rejected .connection-dot {
+  background-color: var(--text-muted);
+}
+
 .connection-label {
   color: var(--text-muted);
 }

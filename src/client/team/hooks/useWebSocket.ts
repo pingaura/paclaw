@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ActivityItem, AgentState } from '../types';
 import { AGENTS } from '../constants';
 import { TeamWebSocket } from '../ws';
+import type { WsStatus } from '../ws';
 
 const MAX_ACTIVITIES = 200;
 const ACTIVE_THRESHOLD = 30_000;     // 30 seconds
@@ -21,6 +22,7 @@ function computeStatus(lastActivity: number): AgentState['status'] {
 
 export function useWebSocket() {
   const [connected, setConnected] = useState(false);
+  const [wsError, setWsError] = useState<string | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [agentStates, setAgentStates] = useState<Map<string, AgentState>>(() => {
     const map = new Map<string, AgentState>();
@@ -66,12 +68,13 @@ export function useWebSocket() {
     });
   }, []);
 
-  const handleConnection = useCallback((isConnected: boolean) => {
-    setConnected(isConnected);
+  const handleStatus = useCallback((status: WsStatus) => {
+    setConnected(status.connected);
+    setWsError(status.error);
   }, []);
 
   useEffect(() => {
-    const ws = new TeamWebSocket(buildWsUrl(), handleMessage, handleConnection);
+    const ws = new TeamWebSocket(buildWsUrl(), handleMessage, handleStatus);
     wsRef.current = ws;
     ws.connect();
 
@@ -79,7 +82,7 @@ export function useWebSocket() {
       ws.disconnect();
       wsRef.current = null;
     };
-  }, [handleMessage, handleConnection]);
+  }, [handleMessage, handleStatus]);
 
   // Periodically update agent statuses based on time elapsed
   useEffect(() => {
@@ -101,5 +104,5 @@ export function useWebSocket() {
     return () => clearInterval(timer);
   }, []);
 
-  return { connected, activities, agentStates };
+  return { connected, wsError, activities, agentStates };
 }
