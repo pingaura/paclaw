@@ -41,9 +41,9 @@ publicRoutes.get('/api/status', async (c) => {
     }
 
     // Process exists, check if it's actually responding
-    // Try to reach the gateway with a short timeout
+    // Cold start (R2 restore, onboard, config patch, gateway) can take 1–2 min
     try {
-      await process.waitForPort(18789, { mode: 'tcp', timeout: 5000 });
+      await process.waitForPort(18789, { mode: 'tcp', timeout: 20000 });
       return c.json({ ok: true, status: 'running', processId: process.id });
     } catch {
       return c.json({ ok: false, status: 'not_responding', processId: process.id });
