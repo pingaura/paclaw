@@ -378,7 +378,7 @@ All three are required. OpenClaw constructs the gateway URL from the account ID 
 npm run deploy
 ```
 
-When Cloudflare AI Gateway is configured, it takes precedence over direct `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`.
+Provider priority is: `OPENAI_API_KEY` first, then `ANTHROPIC_API_KEY`, then Cloudflare AI Gateway (when all three gateway secrets are set).
 
 ### Choosing a Model
 
