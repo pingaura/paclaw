@@ -316,6 +316,13 @@ fi
 echo "Starting OpenClaw Gateway..."
 echo "Gateway will be available on port 18789"
 
+# If a gateway is already running (e.g. second start in same sandbox), stop it first
+# so we don't fail with "gateway already running (pid N); lock timeout"
+if openclaw gateway stop 2>/dev/null; then
+    echo "Stopped existing gateway before start"
+    sleep 2
+fi
+
 rm -f /tmp/openclaw-gateway.lock 2>/dev/null || true
 rm -f "$CONFIG_DIR/gateway.lock" 2>/dev/null || true
 

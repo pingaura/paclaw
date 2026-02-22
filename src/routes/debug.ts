@@ -204,6 +204,29 @@ debug.get('/logs', async (c) => {
   }
 });
 
+// GET /debug/gateway-log - Tail of OpenClaw gateway log (for AI/API errors when assistant reply is empty)
+debug.get('/gateway-log', async (c) => {
+  const sandbox = c.get('sandbox');
+  const lines = Math.min(Math.max(parseInt(c.req.query('lines') || '300', 10), 1), 2000);
+  try {
+    const proc = await sandbox.startProcess(
+      `sh -c 'tail -n ${lines} /tmp/openclaw/openclaw-*.log 2>/dev/null || echo "(no log file)"'`,
+    );
+    await waitForProcess(proc, 5000);
+    const logs = await proc.getLogs();
+    const content = (logs.stdout || '').trim() || (logs.stderr || '').trim() || '(empty)';
+    return c.json({
+      status: 'ok',
+      lines_requested: lines,
+      log: content,
+      hint: 'Search for "error", "fail", "401", "429", "timeout" to find why the agent returned empty.',
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});
+
 // GET /debug/ws-test - Interactive WebSocket debug page
 debug.get('/ws-test', async (c) => {
   const host = c.req.header('host') || 'localhost';
