@@ -340,7 +340,8 @@ if (process.env.CDP_SECRET && process.env.WORKER_URL) {
     if (!config.browser.profiles.cloudflare) {
         const workerUrl = process.env.WORKER_URL.replace(/\/+$/, '');
         config.browser.profiles.cloudflare = {
-            cdpUrl: workerUrl + '/cdp?secret=' + encodeURIComponent(process.env.CDP_SECRET)
+            cdpUrl: workerUrl + '/cdp?secret=' + encodeURIComponent(process.env.CDP_SECRET),
+            color: '#F48120'
         };
         console.log('Created cloudflare CDP browser profile');
     } else {
