@@ -28,6 +28,8 @@ export class TeamWebSocket {
   private onMessage: WsMessageHandler;
   private onStatus: WsStatusHandler;
   private disposed = false;
+  private connectSent = false;
+  private challengeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(url: string, onMessage: WsMessageHandler, onStatus: WsStatusHandler) {
     this.url = url;
@@ -37,6 +39,10 @@ export class TeamWebSocket {
 
   connect(): void {
     if (this.disposed) return;
+    if (this.challengeTimer) {
+      clearTimeout(this.challengeTimer);
+      this.challengeTimer = null;
+    }
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -52,13 +58,31 @@ export class TeamWebSocket {
     this.ws.onopen = () => {
       this.reconnectDelay = 1000;
       this.onStatus({ connected: true, error: null });
-      this.sendConnectFrame();
+      // Protocol v3: wait for connect.challenge event before sending connect frame.
+      // Fallback timer in case the challenge event is delayed or lost.
+      this.connectSent = false;
+      this.challengeTimer = setTimeout(() => {
+        this.sendConnectFrame();
+      }, 750);
     };
 
     this.ws.onmessage = (event) => {
       if (typeof event.data !== 'string') return;
       try {
         const parsed = JSON.parse(event.data);
+
+        // Protocol v3: handle connect.challenge event with nonce
+        if (parsed.type === 'event' && parsed.event === 'connect.challenge') {
+          const nonce = parsed.payload?.nonce;
+          if (typeof nonce === 'string') {
+            if (this.challengeTimer) {
+              clearTimeout(this.challengeTimer);
+              this.challengeTimer = null;
+            }
+            this.sendConnectFrame();
+          }
+          return;
+        }
 
         // Check for error responses from the gateway (e.g. pairing required)
         if (parsed.error?.message) {
@@ -101,6 +125,10 @@ export class TeamWebSocket {
 
   disconnect(): void {
     this.disposed = true;
+    if (this.challengeTimer) {
+      clearTimeout(this.challengeTimer);
+      this.challengeTimer = null;
+    }
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -117,23 +145,29 @@ export class TeamWebSocket {
   }
 
   private sendConnectFrame(): void {
+    if (this.connectSent) return;
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.connectSent = true;
+
     const frame = {
       type: 'req',
       id: `team-${++this.messageId}`,
       method: 'connect',
       params: {
-        minProtocol: 2,
-        maxProtocol: 2,
+        minProtocol: 3,
+        maxProtocol: 3,
         client: {
-          id: 'webchat-ui',
+          id: 'webchat-ui' as const,
           displayName: 'Team Dashboard',
           version: '1.0.0',
-          mode: 'webchat',
+          mode: 'webchat' as const,
           platform: 'web',
         },
         role: 'operator',
-        scopes: [],
+        scopes: [] as string[],
+        caps: [] as string[],
+        userAgent: navigator.userAgent,
+        locale: navigator.language,
       },
     };
     this.ws.send(JSON.stringify(frame));

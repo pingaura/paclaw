@@ -4,7 +4,7 @@
  * Three-step atomic dispatch:
  * 1. Update task status to in_progress in R2
  * 2. Write task file to container filesystem (keeps rclone sync consistent)
- * 3. Send task to agent via WebSocket (gateway protocol v2)
+ * 3. Send task to agent via WebSocket (gateway protocol v3)
  */
 
 import type { Sandbox } from '@cloudflare/sandbox';
@@ -70,7 +70,7 @@ export async function dispatchTask(
  * Instructions are kept minimal — each agent's AGENTS.md has role-specific
  * orchestrator handling rules.
  */
-function buildTaskMessage(task: Task, agentId: AgentId, project: Project): string {
+function buildTaskMessage(task: Task, _agentId: AgentId, project: Project): string {
   const priorityLabel = task.priority.charAt(0).toUpperCase() + task.priority.slice(1);
   const moveCmd = `node skills/abhiyan/scripts/abhiyan.cjs tasks move ${project.id} ${task.id}`;
   return [
@@ -112,10 +112,11 @@ async function sendTaskViaWebSocket(
   });
 
   const response = await sandbox.wsConnect(wsRequest, MOLTBOT_PORT);
-  const ws = response.webSocket;
-  if (!ws) {
+  if (!response.webSocket) {
     throw new Error('No WebSocket in response from gateway');
   }
+  // Capture in a const so TypeScript knows it's non-null inside closures
+  const ws = response.webSocket;
 
   ws.accept();
 
@@ -126,10 +127,47 @@ async function sendTaskViaWebSocket(
     }, WS_TIMEOUT_MS);
 
     let connected = false;
+    let connectSent = false;
+
+    /** Send the connect frame (protocol v3) */
+    function sendConnect() {
+      if (connectSent) return;
+      connectSent = true;
+      const connectFrame = {
+        type: 'req',
+        id: 'orch-connect',
+        method: 'connect',
+        params: {
+          minProtocol: 3,
+          maxProtocol: 3,
+          client: {
+            id: 'gateway-client' as const,
+            displayName: 'Task Orchestrator',
+            version: '1.0.0',
+            mode: 'backend' as const,
+            platform: 'server',
+          },
+          role: 'operator',
+          scopes: [] as string[],
+          caps: [] as string[],
+        },
+      };
+      ws.send(JSON.stringify(connectFrame));
+    }
+
+    // Protocol v3: wait for connect.challenge event; fallback if challenge is delayed
+    const challengeTimer = setTimeout(() => sendConnect(), 750);
 
     ws.addEventListener('message', (event) => {
       try {
         const msg = JSON.parse(typeof event.data === 'string' ? event.data : '');
+
+        // Protocol v3: handle connect.challenge event
+        if (msg.type === 'event' && msg.event === 'connect.challenge') {
+          clearTimeout(challengeTimer);
+          sendConnect();
+          return;
+        }
 
         // Wait for connect response
         if (!connected && msg.type === 'res' && msg.id === 'orch-connect') {
@@ -172,6 +210,7 @@ async function sendTaskViaWebSocket(
 
     ws.addEventListener('close', (event) => {
       clearTimeout(timeout);
+      clearTimeout(challengeTimer);
       if (!connected) {
         reject(new Error(`WebSocket closed before connect: ${event.code} ${event.reason}`));
       }
@@ -179,28 +218,8 @@ async function sendTaskViaWebSocket(
 
     ws.addEventListener('error', () => {
       clearTimeout(timeout);
+      clearTimeout(challengeTimer);
       reject(new Error('WebSocket error'));
     });
-
-    // Send connect frame
-    const connectFrame = {
-      type: 'req',
-      id: 'orch-connect',
-      method: 'connect',
-      params: {
-        minProtocol: 2,
-        maxProtocol: 2,
-        client: {
-          id: 'task-orchestrator',
-          displayName: 'Task Orchestrator',
-          version: '1.0.0',
-          mode: 'webchat',
-          platform: 'server',
-        },
-        role: 'operator',
-        scopes: [],
-      },
-    };
-    ws.send(JSON.stringify(connectFrame));
   });
 }
