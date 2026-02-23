@@ -18,6 +18,7 @@ CONFIG_DIR="/root/.openclaw"
 CONFIG_FILE="$CONFIG_DIR/openclaw.json"
 WORKSPACE_DIR="/root/clawd"
 SKILLS_DIR="/root/clawd/skills"
+ABHIYAN_DIR="/root/clawd/abhiyan"
 RCLONE_CONF="/root/.config/rclone/rclone.conf"
 LAST_SYNC_FILE="/tmp/.last-sync"
 
@@ -93,6 +94,15 @@ if r2_configured; then
         mkdir -p "$SKILLS_DIR"
         rclone copy "r2:${R2_BUCKET}/skills/" "$SKILLS_DIR/" $RCLONE_FLAGS -v 2>&1 || echo "WARNING: skills restore failed with exit code $?"
         echo "Skills restored"
+    fi
+
+    # Restore abhiyan project data
+    REMOTE_AB_COUNT=$(rclone ls "r2:${R2_BUCKET}/abhiyan/" $RCLONE_FLAGS 2>/dev/null | wc -l)
+    if [ "$REMOTE_AB_COUNT" -gt 0 ]; then
+        echo "Restoring abhiyan data from R2 ($REMOTE_AB_COUNT files)..."
+        mkdir -p "$ABHIYAN_DIR"
+        rclone copy "r2:${R2_BUCKET}/abhiyan/" "$ABHIYAN_DIR/" $RCLONE_FLAGS -v 2>&1 || echo "WARNING: abhiyan restore failed with exit code $?"
+        echo "Abhiyan data restored"
     fi
 else
     echo "R2 not configured, starting fresh"
@@ -359,6 +369,14 @@ if (process.env.CDP_SECRET && process.env.WORKER_URL) {
     }
 }
 
+// Abhiyan project management skill — always enable
+if (!config.skills.entries['abhiyan']) {
+    config.skills.entries['abhiyan'] = { enabled: true };
+    console.log('Registered abhiyan skill');
+} else {
+    console.log('abhiyan skill already configured, skipping');
+}
+
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 console.log('Configuration patched successfully');
 EOFPATCH
@@ -393,10 +411,14 @@ if r2_configured; then
                     $RCLONE_FLAGS --exclude='*.lock' --exclude='*.log' --exclude='*.tmp' --exclude='.git/**' 2>> "$LOGFILE"
                 if [ -d "$WORKSPACE_DIR" ]; then
                     rclone sync "$WORKSPACE_DIR/" "r2:${R2_BUCKET}/workspace/" \
-                        $RCLONE_FLAGS --exclude='skills/**' --exclude='.git/**' --exclude='node_modules/**' 2>> "$LOGFILE"
+                        $RCLONE_FLAGS --exclude='skills/**' --exclude='abhiyan/**' --exclude='.git/**' --exclude='node_modules/**' 2>> "$LOGFILE"
                 fi
                 if [ -d "$SKILLS_DIR" ]; then
                     rclone sync "$SKILLS_DIR/" "r2:${R2_BUCKET}/skills/" \
+                        $RCLONE_FLAGS 2>> "$LOGFILE"
+                fi
+                if [ -d "$ABHIYAN_DIR" ]; then
+                    rclone sync "$ABHIYAN_DIR/" "r2:${R2_BUCKET}/abhiyan/" \
                         $RCLONE_FLAGS 2>> "$LOGFILE"
                 fi
                 date -Iseconds > "$LAST_SYNC_FILE"

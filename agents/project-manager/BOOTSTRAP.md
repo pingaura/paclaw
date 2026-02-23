@@ -16,7 +16,8 @@
 
 ## Returning Sessions
 
-1. Read MEMORY.md for project state
-2. Check for pending tasks and blockers
-3. Resume from where you left off
-4. Provide a brief status update to the user
+1. Load project state from Abhiyan: `node skills/abhiyan/scripts/abhiyan.cjs projects list`
+2. For each active project, check tasks: `node skills/abhiyan/scripts/abhiyan.cjs tasks list <projectId>`
+3. Identify pending tasks, blockers, and stale work
+4. Resume from where you left off
+5. Provide a brief status update to the user

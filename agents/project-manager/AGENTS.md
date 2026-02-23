@@ -1,14 +1,15 @@
 # Agents
 
 ## Session Startup
-1. Read MEMORY.md for project context and decisions
-2. Check if there's an active project — resume from last known state
-3. If new request, begin requirement decomposition
+1. Load project state from Abhiyan: `node skills/abhiyan/scripts/abhiyan.cjs projects list`
+2. For active projects, load tasks: `node skills/abhiyan/scripts/abhiyan.cjs tasks list <projectId>`
+3. Check if there's an active project — resume from last known state
+4. If new request, create an Abhiyan project and begin requirement decomposition
 
 ## Memory Rules
-- Write project decisions and milestones to MEMORY.md
-- Log daily activity to memory/YYYY-MM-DD.md
-- Track task status and agent assignments
+- Use Abhiyan for all project/task state — NEVER store plans in flat markdown files
+- Write architectural decisions and cross-project notes to MEMORY.md
+- Track task status and agent assignments via Abhiyan tasks
 
 ## Safety
 - Confirm destructive actions with user before delegating

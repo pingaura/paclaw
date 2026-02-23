@@ -150,11 +150,17 @@ export class TeamWebSocket {
   }
 
   private parseMessage(msg: Record<string, unknown>): ActivityItem | null {
-    // Try to identify agent from message fields
-    const params = (msg.params || {}) as Record<string, unknown>;
+    // Unwrap numeric-key wrappers like {"0": {...}}
+    let root = msg;
+    if (typeof root['0'] === 'object' && root['0'] !== null && Object.keys(root).every((k) => /^\d+$/.test(k))) {
+      root = root['0'] as Record<string, unknown>;
+    }
+
+    const params = (root.params || {}) as Record<string, unknown>;
     const from = (params.from as string) || '';
     const to = (params.to as string) || '';
-    const method = (msg.method as string) || '';
+    const method = (root.method as string) || '';
+    const toolName = (params.tool || params.toolName || '') as string;
 
     // Check if 'from' or 'to' matches a known agent (word-boundary match)
     let agentId: string | null = null;
@@ -168,7 +174,7 @@ export class TeamWebSocket {
 
     // Also check in full message content
     if (!agentId) {
-      const content = JSON.stringify(msg);
+      const content = JSON.stringify(root);
       for (const [id, regex] of AGENT_PATTERNS) {
         if (regex.test(content)) {
           agentId = id;
@@ -185,20 +191,28 @@ export class TeamWebSocket {
     let type: ActivityItem['type'] = 'message';
     if (method === 'connect' || method === 'disconnect') {
       type = 'system';
-    } else if (msg.error) {
+    } else if (root.error) {
       type = 'error';
-    } else if (method.includes('assign') || method.includes('delegate')) {
+    } else if (method.includes('assign') || method.includes('delegate') || method === 'sessions.send' || method === 'sessions.spawn') {
       type = 'coordination';
     }
 
-    // Extract summary
-    let summary = method || 'activity';
+    // Build readable summary
+    let summary = '';
     const msgContent = params.message || params.content || params.text;
-    if (typeof msgContent === 'string') {
+    if (typeof msgContent === 'string' && msgContent.length > 0) {
       summary = msgContent.length > 150 ? msgContent.slice(0, 147) + '...' : msgContent;
     } else if (method) {
-      summary = `${method} ${from ? `from ${from}` : ''} ${to ? `to ${to}` : ''}`.trim();
+      const parts: string[] = [];
+      const readableMethod = method.replace(/\./g, ' ').replace(/_/g, ' ');
+      parts.push(readableMethod);
+      if (toolName) parts.push(`[${toolName}]`);
+      if (from) parts.push(`from ${from}`);
+      if (to) parts.push(`\u2192 ${to}`);
+      summary = parts.join(' ');
     }
+
+    if (!summary) summary = method || 'activity';
 
     return {
       id: `ws-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
