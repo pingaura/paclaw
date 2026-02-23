@@ -312,6 +312,42 @@ if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN) {
     });
 }
 
+// Skills configuration — register cloudflare-browser skill
+// Ref: https://docs.openclaw.ai/tools/skills-config.md
+config.skills = config.skills || {};
+config.skills.entries = config.skills.entries || {};
+if (process.env.CDP_SECRET && process.env.WORKER_URL) {
+    // Only set defaults — never override existing skill/browser config from R2
+    if (!config.skills.entries['cloudflare-browser']) {
+        config.skills.entries['cloudflare-browser'] = {
+            enabled: true,
+            env: {
+                CDP_SECRET: process.env.CDP_SECRET,
+                WORKER_URL: process.env.WORKER_URL
+            }
+        };
+        console.log('Registered cloudflare-browser skill');
+    } else {
+        console.log('cloudflare-browser skill already configured, skipping');
+    }
+
+    // Browser profile for remote CDP (attach-only, no lifecycle management)
+    // Ref: https://docs.openclaw.ai/tools/browser.md
+    config.browser = config.browser || {};
+    if (config.browser.enabled === undefined) config.browser.enabled = true;
+    config.browser.defaultProfile = config.browser.defaultProfile || 'cloudflare';
+    config.browser.profiles = config.browser.profiles || {};
+    if (!config.browser.profiles.cloudflare) {
+        const workerUrl = process.env.WORKER_URL.replace(/\/+$/, '');
+        config.browser.profiles.cloudflare = {
+            cdpUrl: workerUrl + '/cdp?secret=' + encodeURIComponent(process.env.CDP_SECRET)
+        };
+        console.log('Created cloudflare CDP browser profile');
+    } else {
+        console.log('Cloudflare browser profile already configured, skipping');
+    }
+}
+
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 console.log('Configuration patched successfully');
 EOFPATCH
