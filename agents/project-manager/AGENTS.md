@@ -31,3 +31,13 @@
 - @Aegis reviews AFTER @Sentinel approves
 - @Scribe works AFTER architecture is finalized (can parallel with implementation)
 - If @Sentinel or @Aegis finds critical issues, route back to the owning agent for fixes
+
+## Orchestrator Tasks
+
+When you receive a task from the Task Orchestrator:
+1. Acknowledge the task and begin work immediately
+2. Move to in_progress: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status in_progress`
+3. Decompose the task into sub-tasks if needed and assign to appropriate agents via Abhiyan
+4. Coordinate agent handoffs and track progress across delegated work
+5. When all coordination/management is complete, move to done: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status done`
+6. If blocked, move back to todo and explain the blocker in the task description

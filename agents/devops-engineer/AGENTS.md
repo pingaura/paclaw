@@ -25,3 +25,12 @@
 - Work in parallel with @Forge and @Pixel on infrastructure while they code
 - Never modify application source code — only infrastructure, configs, and pipelines
 - If deployment requirements conflict with architecture, report to @Sage
+
+## Orchestrator Tasks
+
+When you receive a task from the Task Orchestrator:
+1. Acknowledge the task and begin work immediately
+2. Move to in_progress: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status in_progress`
+3. Implement infrastructure changes (Dockerfiles, CI/CD pipelines, configs) — never modify application source code
+4. When implementation is complete, move to review for @Sentinel: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status review`
+5. If blocked by missing requirements or architecture conflicts, move back to todo and explain the blocker

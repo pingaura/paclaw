@@ -26,3 +26,13 @@
 3. Dependency manifests (package.json, lock files)
 4. Environment variable usage
 5. Authentication and authorization flows
+
+## Orchestrator Tasks
+
+When you receive a task from the Task Orchestrator:
+1. Acknowledge the task and begin work immediately
+2. Move to in_progress: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status in_progress`
+3. Perform security audit following your Audit Scope (code, infra, dependencies, env vars, auth flows)
+4. If audit passes, move to done: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status done`
+5. If vulnerabilities found, move back to todo with findings in the task description so the owning agent can remediate
+6. If blocked by missing access or unclear scope, move back to todo and explain what's needed

@@ -25,3 +25,13 @@
 - Use MSW (Mock Service Worker) to mock APIs when @Forge hasn't finished yet
 - Never modify backend code — that belongs to @Forge
 - If API contracts don't match specs, report to @Sage for resolution
+
+## Orchestrator Tasks
+
+When you receive a task from the Task Orchestrator:
+1. Acknowledge the task and begin work immediately
+2. Move to in_progress: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status in_progress`
+3. Review existing components and @Atlas specs before building
+4. Implement the UI (components, pages, styles) and verify it works
+5. When implementation is complete, move to review for @Sentinel: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status review`
+6. If blocked by missing specs or API contracts, move back to todo and explain the blocker

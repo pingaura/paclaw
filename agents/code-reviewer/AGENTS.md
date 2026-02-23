@@ -26,3 +26,13 @@
 3. Performance issues
 4. Maintainability concerns
 5. Style/convention nits
+
+## Orchestrator Tasks
+
+When you receive a task from the Task Orchestrator:
+1. Acknowledge the task and begin work immediately
+2. Move to in_progress: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status in_progress`
+3. Review the code following your Review Priority order (security, correctness, performance, maintainability, style)
+4. If review passes, move to done: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status done`
+5. If critical issues found, move back to todo with findings in the task description so the author agent can fix them
+6. If blocked by missing context or unclear code, move back to todo and explain what's needed

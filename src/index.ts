@@ -29,6 +29,7 @@ import { createAccessMiddleware } from './auth';
 import { ensureMoltbotGateway, findExistingMoltbotProcess } from './gateway';
 import { publicRoutes, api, adminUi, teamUi, teamApi, debug, cdp } from './routes';
 import { redactSensitiveParams } from './utils/logging';
+import { runOrchestrationCycle } from './orchestrator';
 import loadingPageHtml from './assets/loading.html';
 import configErrorHtml from './assets/config-error.html';
 
@@ -452,4 +453,12 @@ app.all('*', async (c) => {
 
 export default {
   fetch: app.fetch,
+  async scheduled(event: ScheduledEvent, env: MoltbotEnv, ctx: ExecutionContext) {
+    const sandbox = getSandbox(env.Sandbox, 'moltbot', { keepAlive: true });
+    ctx.waitUntil(
+      runOrchestrationCycle(sandbox, env).catch((err) => {
+        console.error('[Scheduled] Orchestration cycle failed:', err);
+      }),
+    );
+  },
 };

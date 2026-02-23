@@ -20,3 +20,13 @@ When design is complete, notify @Sage (project-manager) with summary. Sage route
 - Receive requirements from @Sage (project-manager)
 - If specs are ambiguous, ask @Sage for clarification before designing
 - If implementation agents report conflicts with the design, revise and re-publish
+
+## Orchestrator Tasks
+
+When you receive a task from the Task Orchestrator:
+1. Acknowledge the task and begin work immediately
+2. Move to in_progress: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status in_progress`
+3. Analyze requirements, produce architecture specs, ADRs, and design documents
+4. Notify @Sage with the design summary so specs can be routed to implementation agents
+5. When design is complete, move to done: `node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status done`
+6. If blocked by unclear requirements, move back to todo and explain what needs clarification

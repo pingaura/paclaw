@@ -284,4 +284,8 @@ teamApi.get('/activity', async (c) => {
 import { projectsApi } from './projects-api';
 teamApi.route('/projects', projectsApi);
 
+// Mount orchestrator sub-routes
+import { orchestratorApi } from './orchestrator-api';
+teamApi.route('/orchestrator', orchestratorApi);
+
 export { teamApi };
