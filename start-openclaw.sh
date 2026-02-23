@@ -310,6 +310,16 @@ if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN) {
         appToken: process.env.SLACK_APP_TOKEN,
         enabled: true,
     });
+
+    // Migrate dm.policy → dmPolicy (renamed in 2026.2.22)
+    if (config.channels.slack.dm && config.channels.slack.dm.policy) {
+        config.channels.slack.dmPolicy = config.channels.slack.dmPolicy || config.channels.slack.dm.policy;
+        delete config.channels.slack.dm.policy;
+        if (Object.keys(config.channels.slack.dm).length === 0) {
+            delete config.channels.slack.dm;
+        }
+        console.log('Migrated Slack dm.policy → dmPolicy');
+    }
 }
 
 // Skills configuration — register cloudflare-browser skill
