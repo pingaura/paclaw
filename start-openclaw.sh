@@ -355,6 +355,13 @@ if (process.env.CDP_SECRET && process.env.WORKER_URL) {
     // Ref: https://docs.openclaw.ai/tools/browser.md
     config.browser = config.browser || {};
     if (config.browser.enabled === undefined) config.browser.enabled = true;
+
+    // SSRF policy: 2026.2.23 renamed allowPrivateNetwork → dangerouslyAllowPrivateNetwork
+    // and defaults to trusted-network mode. Our CDP connects to a Cloudflare Worker
+    // over private networking, so we need this enabled.
+    config.browser.ssrfPolicy = config.browser.ssrfPolicy || {};
+    config.browser.ssrfPolicy.dangerouslyAllowPrivateNetwork = true;
+    delete config.browser.ssrfPolicy.allowPrivateNetwork; // drop legacy key
     config.browser.defaultProfile = config.browser.defaultProfile || 'cloudflare';
     config.browser.profiles = config.browser.profiles || {};
     if (!config.browser.profiles.cloudflare) {
