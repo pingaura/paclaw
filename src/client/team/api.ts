@@ -37,7 +37,15 @@ async function teamMutate<T>(
   });
 
   if (!response.ok) {
-    throw new Error(`Team API error: ${response.status}`);
+    // Try to extract a descriptive error message from the response body
+    let message = `Team API error: ${response.status}`;
+    try {
+      const data = await response.json() as { error?: string };
+      if (data.error) message = data.error;
+    } catch {
+      // Body wasn't JSON, use status-based message
+    }
+    throw new Error(message);
   }
 
   return response.json() as Promise<T>;
@@ -71,3 +79,7 @@ export const deleteTask = (projectId: string, taskId: string) =>
   teamMutate<{ ok: boolean }>(`/projects/${projectId}/tasks/${taskId}`, 'DELETE');
 export const moveTask = (projectId: string, taskId: string, status: TaskStatus) =>
   teamMutate<Task>(`/projects/${projectId}/tasks/${taskId}/move`, 'PATCH', { status });
+
+// Agent messaging
+export const sendAgentMessage = (to: string, message: string) =>
+  teamMutate<{ ok: boolean }>('/send-message', 'POST', { to, message });

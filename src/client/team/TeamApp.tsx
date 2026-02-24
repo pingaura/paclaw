@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useTeamStatus } from './hooks/useTeamStatus';
 import { useProjects } from './hooks/useProjects';
@@ -8,6 +8,7 @@ import ProjectHeader from './components/ProjectHeader';
 import TaskBoard from './components/TaskBoard';
 import PipelineView from './components/PipelineView';
 import ActivityFeed from './components/ActivityFeed';
+import AgentChatInput from './components/AgentChatInput';
 import ConnectionStatus from './components/ConnectionStatus';
 import type { ActivityItem } from './types';
 import './TeamApp.css';
@@ -21,29 +22,29 @@ export default function TeamApp() {
   } = useProjects();
 
   const [activityOpen, setActivityOpen] = useState(true);
+  const [chatActivities, setChatActivities] = useState<ActivityItem[]>([]);
 
-  // Merge REST activities with WS activities (dedup by id)
+  const handleChatSend = useCallback((item: ActivityItem) => {
+    setChatActivities((prev) => [...prev, item]);
+  }, []);
+
+  // Merge REST + WS + chat activities (dedup by id)
   const allActivities = useMemo<ActivityItem[]>(() => {
     const seen = new Set<string>();
     const merged: ActivityItem[] = [];
 
-    for (const item of restActivities) {
-      if (!seen.has(item.id)) {
-        seen.add(item.id);
-        merged.push(item);
-      }
-    }
-
-    for (const item of wsActivities) {
-      if (!seen.has(item.id)) {
-        seen.add(item.id);
-        merged.push(item);
+    for (const items of [restActivities, wsActivities, chatActivities]) {
+      for (const item of items) {
+        if (!seen.has(item.id)) {
+          seen.add(item.id);
+          merged.push(item);
+        }
       }
     }
 
     merged.sort((a, b) => a.timestamp - b.timestamp);
     return merged;
-  }, [restActivities, wsActivities]);
+  }, [restActivities, wsActivities, chatActivities]);
 
   const gatewayOk = status?.gateway?.ok ?? false;
 
@@ -104,7 +105,12 @@ export default function TeamApp() {
           <button className="ab-activity-toggle" onClick={() => setActivityOpen(!activityOpen)}>
             {activityOpen ? '\u276F' : '\u276E'}
           </button>
-          {activityOpen && <ActivityFeed activities={allActivities} />}
+          {activityOpen && (
+            <>
+              <ActivityFeed activities={allActivities} />
+              <AgentChatInput onSend={handleChatSend} />
+            </>
+          )}
         </div>
       </div>
 

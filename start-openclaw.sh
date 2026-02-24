@@ -377,6 +377,15 @@ if (!config.skills.entries['abhiyan']) {
     console.log('abhiyan skill already configured, skipping');
 }
 
+// Ensure agents can discover custom skills in /root/clawd/skills/
+// Each agent has its own workspace, so without extraDirs they can't find custom skills.
+config.skills.load = config.skills.load || {};
+config.skills.load.extraDirs = config.skills.load.extraDirs || [];
+if (!config.skills.load.extraDirs.includes('/root/clawd/skills')) {
+    config.skills.load.extraDirs.push('/root/clawd/skills');
+    console.log('Added /root/clawd/skills to skills.load.extraDirs');
+}
+
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 console.log('Configuration patched successfully');
 EOFPATCH

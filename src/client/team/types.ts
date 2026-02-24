@@ -107,3 +107,8 @@ export interface CreateTaskInput {
   assignedAgents: string[];
   pipelineStage: number | null;
 }
+
+export interface SendMessageInput {
+  to: string;
+  message: string;
+}

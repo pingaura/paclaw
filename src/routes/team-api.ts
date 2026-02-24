@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { findExistingMoltbotProcess, waitForProcess } from '../gateway';
+import { MOLTBOT_PORT } from '../config';
 
 /**
  * Team Dashboard API routes
@@ -278,6 +279,154 @@ teamApi.get('/activity', async (c) => {
   }
 
   return c.json({ items });
+});
+
+// POST /api/team/send-message — Send a message to an agent via the gateway
+teamApi.post('/send-message', async (c) => {
+  const sandbox = c.get('sandbox');
+  const body = await c.req.json<{ to?: string; message?: string }>();
+
+  const { to, message } = body;
+  if (!to || !AGENT_IDS.includes(to)) {
+    return c.json({ error: `Invalid agent: ${to}` }, 400);
+  }
+  if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    return c.json({ error: 'Message is required' }, 400);
+  }
+  if (message.length > 4000) {
+    return c.json({ error: 'Message too long (max 4000 chars)' }, 400);
+  }
+
+  const env = c.env;
+
+  // Connect to gateway via WebSocket (protocol v3 challenge flow)
+  const wsUrl = new URL('http://localhost/');
+  if (env.MOLTBOT_GATEWAY_TOKEN) {
+    wsUrl.searchParams.set('token', env.MOLTBOT_GATEWAY_TOKEN);
+  }
+  const wsRequest = new Request(wsUrl.toString(), {
+    headers: { Upgrade: 'websocket' },
+  });
+
+  let response: { webSocket?: WebSocket | null };
+  try {
+    response = await sandbox.wsConnect(wsRequest, MOLTBOT_PORT);
+  } catch (err) {
+    return c.json({ error: 'Failed to connect to gateway' }, 502);
+  }
+
+  if (!response.webSocket) {
+    return c.json({ error: 'No WebSocket in gateway response' }, 502);
+  }
+
+  const ws = response.webSocket;
+  ws.accept();
+
+  const WS_TIMEOUT = 15_000;
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        ws.close(1000, 'timeout');
+        reject(new Error('Gateway timeout'));
+      }, WS_TIMEOUT);
+
+      let connected = false;
+      let connectSent = false;
+
+      function sendConnect() {
+        if (connectSent) return;
+        connectSent = true;
+        ws.send(JSON.stringify({
+          type: 'req',
+          id: 'chat-connect',
+          method: 'connect',
+          params: {
+            minProtocol: 3,
+            maxProtocol: 3,
+            client: {
+              id: 'gateway-client',
+              displayName: 'Team Dashboard',
+              version: '1.0.0',
+              mode: 'backend',
+              platform: 'server',
+            },
+            role: 'operator',
+            scopes: [],
+            caps: [],
+          },
+        }));
+      }
+
+      // Fallback if challenge is delayed
+      const challengeTimer = setTimeout(() => sendConnect(), 750);
+
+      ws.addEventListener('message', (event: MessageEvent) => {
+        try {
+          const msg = JSON.parse(typeof event.data === 'string' ? event.data : '');
+
+          // Handle connect.challenge event
+          if (msg.type === 'event' && msg.event === 'connect.challenge') {
+            clearTimeout(challengeTimer);
+            sendConnect();
+            return;
+          }
+
+          // Wait for connect response
+          if (!connected && msg.type === 'res' && msg.id === 'chat-connect') {
+            if (msg.error) {
+              clearTimeout(timeout);
+              ws.close(1000, 'connect error');
+              reject(new Error(`Gateway connect error: ${msg.error.message}`));
+              return;
+            }
+            connected = true;
+
+            // Send the user message
+            ws.send(JSON.stringify({
+              type: 'req',
+              id: `msg-${Date.now()}`,
+              method: 'sessions.send',
+              params: { to, message: message.trim() },
+            }));
+            return;
+          }
+
+          // Wait for sessions.send response
+          if (connected && msg.type === 'res' && msg.id?.startsWith('msg-')) {
+            clearTimeout(timeout);
+            ws.close(1000, 'done');
+            if (msg.error) {
+              reject(new Error(`Send error: ${msg.error.message}`));
+            } else {
+              resolve();
+            }
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      });
+
+      ws.addEventListener('close', (event: CloseEvent) => {
+        clearTimeout(timeout);
+        clearTimeout(challengeTimer);
+        // Reject whether we connected or not — if the promise had already
+        // resolved/rejected, this extra reject is harmless (promises settle once).
+        reject(new Error(`WebSocket closed: ${event.code} ${event.reason}`));
+      });
+
+      ws.addEventListener('error', () => {
+        clearTimeout(timeout);
+        clearTimeout(challengeTimer);
+        reject(new Error('WebSocket error'));
+      });
+    });
+
+    return c.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return c.json({ error: msg }, 502);
+  }
 });
 
 // Mount project management sub-routes

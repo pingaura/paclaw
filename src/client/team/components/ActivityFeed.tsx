@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import type { ActivityItem } from '../types';
-import { AGENT_MAP } from '../constants';
 
 interface ActivityFeedProps {
   activities: ActivityItem[];
@@ -54,27 +53,25 @@ export default function ActivityFeed({ activities }: ActivityFeedProps) {
         {activities.length === 0 ? (
           <div className="activity-empty">No activity yet. Waiting for agent messages...</div>
         ) : (
-          activities.map((item, idx) => {
-            const agentMeta = AGENT_MAP.get(item.agentId);
-            return (
+          activities.map((item, idx) => (
               <div
                 key={item.id}
                 className={`activity-item activity-type-${item.type}`}
                 {...(idx >= newStartIndex ? { 'data-new': '' } : {})}
               >
-                <span className="activity-time">{formatTime(item.timestamp)}</span>
-                <span className="activity-agent">
-                  <span className="activity-emoji">{item.agentEmoji}</span>
-                  {item.agentName}
-                  {agentMeta?.role && <span className="activity-role">{agentMeta.role}</span>}
-                </span>
-                <span className={`activity-badge badge-${item.type}`}>
-                  {TYPE_LABELS[item.type]}
-                </span>
+                <div className="activity-item-header">
+                  <span className="activity-agent">
+                    <span className="activity-emoji">{item.agentEmoji}</span>
+                    {item.agentName}
+                  </span>
+                  <span className={`activity-badge badge-${item.type}`}>
+                    {TYPE_LABELS[item.type]}
+                  </span>
+                  <span className="activity-time">{formatTime(item.timestamp)}</span>
+                </div>
                 <span className="activity-summary">{item.summary}</span>
               </div>
-            );
-          })
+            ))
         )}
       </div>
     </section>
