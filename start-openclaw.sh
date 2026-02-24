@@ -2,8 +2,8 @@
 # Startup script for OpenClaw in Cloudflare Sandbox
 # This script:
 # 1. Restores config/workspace/skills from R2 via rclone (if configured)
-# 2. Runs openclaw onboard --non-interactive to configure from env vars
-# 3. Patches config for features onboard doesn't cover (channels, gateway auth)
+# 2. Runs openclaw onboard --non-interactive to configure from env vars (first run only)
+# 3. Patches config to inject runtime secrets and agent configuration
 # 4. Starts a background sync loop (rclone, watches for file changes)
 # 5. Starts the gateway
 
@@ -62,18 +62,10 @@ if r2_configured; then
     setup_rclone
 
     echo "Checking R2 for existing backup..."
-    # Check if R2 has an openclaw config backup
     if rclone ls "r2:${R2_BUCKET}/openclaw/openclaw.json" $RCLONE_FLAGS 2>/dev/null | grep -q openclaw.json; then
         echo "Restoring config from R2..."
         rclone copy "r2:${R2_BUCKET}/openclaw/" "$CONFIG_DIR/" $RCLONE_FLAGS -v 2>&1 || echo "WARNING: config restore failed with exit code $?"
         echo "Config restored"
-    elif rclone ls "r2:${R2_BUCKET}/clawdbot/clawdbot.json" $RCLONE_FLAGS 2>/dev/null | grep -q clawdbot.json; then
-        echo "Restoring from legacy R2 backup..."
-        rclone copy "r2:${R2_BUCKET}/clawdbot/" "$CONFIG_DIR/" $RCLONE_FLAGS -v 2>&1 || echo "WARNING: legacy config restore failed with exit code $?"
-        if [ -f "$CONFIG_DIR/clawdbot.json" ] && [ ! -f "$CONFIG_FILE" ]; then
-            mv "$CONFIG_DIR/clawdbot.json" "$CONFIG_FILE"
-        fi
-        echo "Legacy config restored and migrated"
     else
         echo "No backup found in R2, starting fresh"
     fi
@@ -142,13 +134,11 @@ else
 fi
 
 # ============================================================
-# PATCH CONFIG (channels, gateway auth, trusted proxies)
+# PATCH CONFIG (inject runtime secrets + agent configuration)
 # ============================================================
-# openclaw onboard handles provider/model config, but we need to patch in:
-# - Channel config (Telegram, Discord, Slack)
-# - Gateway token auth
-# - Trusted proxies for sandbox networking
-# - Base URL override for legacy AI Gateway path
+# R2 config is the source of truth for models, agents, skills, and channels.
+# This script only injects runtime secrets from env vars and ensures
+# agent coordination (subagents, skills) is configured.
 node << 'EOFPATCH'
 const fs = require('fs');
 
@@ -165,7 +155,7 @@ try {
 config.gateway = config.gateway || {};
 config.channels = config.channels || {};
 
-// Gateway configuration
+// ── Gateway ──
 config.gateway.port = 18789;
 config.gateway.mode = 'local';
 config.gateway.trustedProxies = ['10.1.0.0'];
@@ -180,17 +170,7 @@ if (process.env.OPENCLAW_DEV_MODE === 'true') {
     config.gateway.controlUi.allowInsecureAuth = true;
 }
 
-// Legacy AI Gateway base URL override:
-// ANTHROPIC_BASE_URL is picked up natively by the Anthropic SDK,
-// so we don't need to patch the provider config. Writing a provider
-// entry without a models array breaks OpenClaw's config validation.
-
-// AI Gateway model override (CF_AI_GATEWAY_MODEL=provider/model-id)
-// Adds a provider entry for any AI Gateway provider and sets it as default model.
-// Examples:
-//   workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast
-//   openai/gpt-4o
-//   anthropic/claude-sonnet-4-5
+// ── AI Gateway model override (CF_AI_GATEWAY_MODEL=provider/model-id) ──
 if (process.env.CF_AI_GATEWAY_MODEL) {
     const raw = process.env.CF_AI_GATEWAY_MODEL;
     const slashIdx = raw.indexOf('/');
@@ -230,59 +210,8 @@ if (process.env.CF_AI_GATEWAY_MODEL) {
     }
 }
 
-// Default model based on env vars (self-heal stale R2 configs)
-// Only applies when CF_AI_GATEWAY_MODEL is NOT set (gateway override takes priority)
-if (!process.env.CF_AI_GATEWAY_MODEL) {
-    // Remove stale gateway providers that no longer have valid env vars
-    if (config.models && config.models.providers) {
-        const staleProviders = Object.keys(config.models.providers).filter(p =>
-            p.startsWith('cf-ai-gw-') || p === 'cloudflare-ai-gateway'
-        );
-        staleProviders.forEach(p => {
-            delete config.models.providers[p];
-            console.log('Removed stale provider: ' + p);
-        });
-    }
-    // Remove stale auth profiles
-    if (config.auth && config.auth.profiles) {
-        const staleProfiles = Object.keys(config.auth.profiles).filter(p =>
-            p.startsWith('cloudflare-ai-gateway')
-        );
-        staleProfiles.forEach(p => {
-            delete config.auth.profiles[p];
-        });
-    }
-    // Remove stale model aliases
-    if (config.agents && config.agents.defaults && config.agents.defaults.models) {
-        const staleAliases = Object.keys(config.agents.defaults.models).filter(k =>
-            k.startsWith('cf-ai-gw-') || k.startsWith('cloudflare-ai-gateway')
-        );
-        staleAliases.forEach(k => delete config.agents.defaults.models[k]);
-    }
+// ── Channel tokens (inject from env, never stored in R2) ──
 
-    if (process.env.OPENAI_API_KEY) {
-        config.models = config.models || {};
-        config.models.providers = config.models.providers || {};
-        config.models.providers.openai = {
-            baseUrl: 'https://api.openai.com/v1',
-            api: 'openai-completions',
-            models: [{ id: 'gpt-4o', name: 'GPT-4o', contextWindow: 128000, maxTokens: 16384 }],
-        };
-        config.agents = config.agents || {};
-        config.agents.defaults = config.agents.defaults || {};
-        config.agents.defaults.model = { primary: 'openai/gpt-4o' };
-        console.log('Default model set to openai/gpt-4o (from OPENAI_API_KEY)');
-    } else if (process.env.ANTHROPIC_API_KEY) {
-        config.agents = config.agents || {};
-        config.agents.defaults = config.agents.defaults || {};
-        config.agents.defaults.model = { primary: 'anthropic/claude-sonnet-4-5' };
-        console.log('Default model set to anthropic/claude-sonnet-4-5 (from ANTHROPIC_API_KEY)');
-    }
-}
-
-// Telegram configuration
-// Overwrite entire channel object to drop stale keys from old R2 backups
-// that would fail OpenClaw's strict config validation (see #47)
 if (process.env.TELEGRAM_BOT_TOKEN) {
     const dmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
     config.channels.telegram = {
@@ -297,8 +226,6 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
     }
 }
 
-// Discord configuration
-// Discord uses a nested dm object: dm.policy, dm.allowFrom (per DiscordDmConfig)
 if (process.env.DISCORD_BOT_TOKEN) {
     const dmPolicy = process.env.DISCORD_DM_POLICY || 'pairing';
     const dm = { policy: dmPolicy };
@@ -312,41 +239,21 @@ if (process.env.DISCORD_BOT_TOKEN) {
     };
 }
 
-// Slack configuration
-// Merge into existing config to preserve UI-configured settings (actions, accounts, etc.)
 if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN) {
     config.channels.slack = Object.assign({}, config.channels.slack || {}, {
         botToken: process.env.SLACK_BOT_TOKEN,
         appToken: process.env.SLACK_APP_TOKEN,
         enabled: true,
     });
-
-    // Migrate dm.policy → dmPolicy (renamed in 2026.2.22)
-    if (config.channels.slack.dm && config.channels.slack.dm.policy) {
-        config.channels.slack.dmPolicy = config.channels.slack.dmPolicy || config.channels.slack.dm.policy;
-        delete config.channels.slack.dm.policy;
-        console.log('Migrated Slack dm.policy → dmPolicy');
-    }
-
-    // Migrate dm.allowFrom → allowFrom (moved to top-level in 2026.2.24)
-    if (config.channels.slack.dm && config.channels.slack.dm.allowFrom) {
-        config.channels.slack.allowFrom = config.channels.slack.allowFrom || config.channels.slack.dm.allowFrom;
-        delete config.channels.slack.dm.allowFrom;
-        console.log('Migrated Slack dm.allowFrom → allowFrom');
-    }
-
-    // Clean up empty dm object after migrations
-    if (config.channels.slack.dm && Object.keys(config.channels.slack.dm).length === 0) {
-        delete config.channels.slack.dm;
-    }
 }
 
-// Skills configuration — register cloudflare-browser skill
-// Ref: https://docs.openclaw.ai/tools/skills-config.md
+// ── Skills ──
+
 config.skills = config.skills || {};
 config.skills.entries = config.skills.entries || {};
+
+// cloudflare-browser skill (needs CDP env vars)
 if (process.env.CDP_SECRET && process.env.WORKER_URL) {
-    // Only set defaults — never override existing skill/browser config from R2
     if (!config.skills.entries['cloudflare-browser']) {
         config.skills.entries['cloudflare-browser'] = {
             enabled: true,
@@ -356,21 +263,13 @@ if (process.env.CDP_SECRET && process.env.WORKER_URL) {
             }
         };
         console.log('Registered cloudflare-browser skill');
-    } else {
-        console.log('cloudflare-browser skill already configured, skipping');
     }
 
-    // Browser profile for remote CDP (attach-only, no lifecycle management)
-    // Ref: https://docs.openclaw.ai/tools/browser.md
+    // Browser profile for remote CDP
     config.browser = config.browser || {};
     if (config.browser.enabled === undefined) config.browser.enabled = true;
-
-    // SSRF policy: 2026.2.23 renamed allowPrivateNetwork → dangerouslyAllowPrivateNetwork
-    // and defaults to trusted-network mode. Our CDP connects to a Cloudflare Worker
-    // over private networking, so we need this enabled.
     config.browser.ssrfPolicy = config.browser.ssrfPolicy || {};
     config.browser.ssrfPolicy.dangerouslyAllowPrivateNetwork = true;
-    delete config.browser.ssrfPolicy.allowPrivateNetwork; // drop legacy key
     config.browser.defaultProfile = config.browser.defaultProfile || 'cloudflare';
     config.browser.profiles = config.browser.profiles || {};
     if (!config.browser.profiles.cloudflare) {
@@ -380,32 +279,19 @@ if (process.env.CDP_SECRET && process.env.WORKER_URL) {
             color: '#F48120'
         };
         console.log('Created cloudflare CDP browser profile');
-    } else {
-        console.log('Cloudflare browser profile already configured, skipping');
     }
 }
 
-// Abhiyan project management skill — always enable
-if (!config.skills.entries['abhiyan']) {
-    config.skills.entries['abhiyan'] = { enabled: true };
-    console.log('Registered abhiyan skill');
-} else {
-    console.log('abhiyan skill already configured, skipping');
-}
-
-// Register methodology skills (tdd, planning, executing-tasks, code-review, debugging, workspace-lifecycle, orchestrator-protocol)
-const methodologySkills = ['tdd', 'planning', 'executing-tasks', 'code-review', 'debugging', 'workspace-lifecycle', 'orchestrator-protocol'];
-for (const skillName of methodologySkills) {
+// Ensure all skills are registered globally
+const allSkillNames = ['abhiyan', 'tdd', 'planning', 'executing-tasks', 'code-review', 'debugging', 'workspace-lifecycle', 'orchestrator-protocol'];
+for (const skillName of allSkillNames) {
     if (!config.skills.entries[skillName]) {
         config.skills.entries[skillName] = { enabled: true };
         console.log('Registered ' + skillName + ' skill');
-    } else {
-        console.log(skillName + ' skill already configured, skipping');
     }
 }
 
 // Ensure agents can discover custom skills in /root/clawd/skills/
-// Each agent has its own workspace, so without extraDirs they can't find custom skills.
 config.skills.load = config.skills.load || {};
 config.skills.load.extraDirs = config.skills.load.extraDirs || [];
 if (!config.skills.load.extraDirs.includes('/root/clawd/skills')) {
@@ -414,11 +300,9 @@ if (!config.skills.load.extraDirs.includes('/root/clawd/skills')) {
 }
 
 // ── Agent subagents allowlists & per-agent skills ──
-// Each agent needs subagents.allowAgents to message other agents (required since 2026.2.23)
-// and per-agent skills so abhiyan/cloudflare-browser are discoverable from each workspace.
+
 const allAgentIds = ['sage', 'atlas', 'forge', 'pixel', 'harbor', 'sentinel', 'aegis', 'scribe'];
 
-// Coordination map: who can each agent talk to (based on pipeline in AGENTS.md)
 const allowMap = {
     sage:     ['atlas', 'forge', 'pixel', 'harbor', 'sentinel', 'aegis', 'scribe'],
     atlas:    ['sage', 'forge', 'pixel', 'harbor'],
@@ -430,13 +314,6 @@ const allowMap = {
     scribe:   ['sage', 'atlas', 'forge', 'pixel', 'harbor'],
 };
 
-// Agents that need cloudflare-browser (CDP) access:
-// - pixel: UI testing and visual verification
-// - aegis: security auditing (XSS, CSRF, etc.)
-// - sage: oversight and deployment verification
-const browserAgents = ['pixel', 'aegis', 'sage'];
-
-// Per-agent skill map: which methodology skills each agent gets
 const agentSkillMap = {
     sage:     ['abhiyan', 'cloudflare-browser', 'planning', 'orchestrator-protocol'],
     atlas:    ['abhiyan', 'planning'],
@@ -448,37 +325,20 @@ const agentSkillMap = {
     scribe:   ['abhiyan', 'executing-tasks'],
 };
 
-const allSkills = ['abhiyan', 'cloudflare-browser', 'tdd', 'planning', 'executing-tasks',
-                   'code-review', 'debugging', 'workspace-lifecycle', 'orchestrator-protocol'];
-
 if (config.agents && config.agents.list) {
     for (const agent of config.agents.list) {
         if (!agent.id || !allAgentIds.includes(agent.id)) continue;
 
-        // Set subagents allowlist
         agent.subagents = agent.subagents || {};
         agent.subagents.allowAgents = allowMap[agent.id] || [];
 
-        // Set per-agent skills from the skill map
-        agent.skills = agent.skills || {};
-        agent.skills.entries = agent.skills.entries || {};
-        const enabledSkills = agentSkillMap[agent.id] || ['abhiyan'];
+        const enabledSkills = (agentSkillMap[agent.id] || ['abhiyan']).filter(function(s) {
+            if (s === 'cloudflare-browser' && !(process.env.CDP_SECRET && process.env.WORKER_URL)) return false;
+            return true;
+        });
+        agent.skills = enabledSkills;
 
-        for (const skillName of allSkills) {
-            if (enabledSkills.includes(skillName)) {
-                // cloudflare-browser requires env vars to be useful
-                if (skillName === 'cloudflare-browser' && !(process.env.CDP_SECRET && process.env.WORKER_URL)) {
-                    agent.skills.entries[skillName] = { enabled: false };
-                } else {
-                    agent.skills.entries[skillName] = { enabled: true };
-                }
-            } else {
-                agent.skills.entries[skillName] = { enabled: false };
-            }
-        }
-
-        const enabledList = Object.keys(agent.skills.entries).filter(k => agent.skills.entries[k].enabled);
-        console.log('Agent ' + agent.id + ': allowAgents=' + JSON.stringify(agent.subagents.allowAgents) + ' skills=' + JSON.stringify(enabledList));
+        console.log('Agent ' + agent.id + ': skills=' + JSON.stringify(agent.skills));
     }
 }
 
@@ -542,7 +402,6 @@ echo "Starting OpenClaw Gateway..."
 echo "Gateway will be available on port 18789"
 
 # If a gateway is already running (e.g. second start in same sandbox), stop it first
-# so we don't fail with "gateway already running (pid N); lock timeout"
 if openclaw gateway stop 2>/dev/null; then
     echo "Stopped existing gateway before start"
     sleep 2
