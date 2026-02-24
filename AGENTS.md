@@ -5,6 +5,7 @@ Guidelines for AI agents working on this codebase.
 ## Project Overview
 
 This is a Cloudflare Worker that runs [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot/Clawdbot) in a Cloudflare Sandbox container. It provides:
+
 - Proxying to the OpenClaw gateway (web UI + WebSocket)
 - Admin UI at `/_admin/` for device management
 - API endpoints at `/api/*` for device pairing
@@ -14,7 +15,7 @@ This is a Cloudflare Worker that runs [OpenClaw](https://github.com/openclaw/ope
 
 ## Project Structure
 
-```
+```text
 src/
 ├── index.ts          # Main Hono app, route mounting
 ├── types.ts          # TypeScript type definitions
@@ -50,6 +51,7 @@ src/
 ### CLI Commands
 
 When calling the OpenClaw CLI from the worker, always include `--url ws://localhost:18789`:
+
 ```typescript
 sandbox.startProcess('openclaw devices list --json --url ws://localhost:18789')
 ```
@@ -59,6 +61,7 @@ CLI commands take 10-15 seconds due to WebSocket connection overhead. Use `waitF
 ### Success Detection
 
 The CLI outputs "Approved" (capital A). Use case-insensitive checks:
+
 ```typescript
 stdout.toLowerCase().includes('approved')
 ```
@@ -80,6 +83,7 @@ npm run typecheck     # TypeScript check
 Tests use Vitest. Test files are colocated with source files (`*.test.ts`).
 
 Current test coverage:
+
 - `auth/jwt.test.ts` - JWT decoding and validation
 - `auth/jwks.test.ts` - JWKS fetching and caching
 - `auth/middleware.test.ts` - Auth middleware behavior
@@ -108,7 +112,7 @@ Development documentation goes in AGENTS.md, not README.md.
 
 ## Architecture
 
-```
+```text
 Browser
    │
    ▼
@@ -134,7 +138,7 @@ Browser
 ### Key Files
 
 | File | Purpose |
-|------|---------|
+| ------ | ------- |
 | `src/index.ts` | Worker that manages sandbox lifecycle and proxies requests |
 | `Dockerfile` | Container image based on `cloudflare/sandbox` with Node 22 + OpenClaw |
 | `start-openclaw.sh` | Startup script: R2 restore → onboard → config patch → launch gateway |
@@ -159,7 +163,7 @@ cp .dev.vars.example .dev.vars
 npm run start
 ```
 
-### Environment Variables
+### Local Environment Variables
 
 For local development, create `.dev.vars`:
 
@@ -204,7 +208,7 @@ The startup script selects the auth choice based on which env vars are set:
 These are the env vars passed TO the container (internal names):
 
 | Variable | Config Path | Notes |
-|----------|-------------|-------|
+| -------- | ----------- | ----- |
 | `ANTHROPIC_API_KEY` | (env var) | OpenClaw reads directly from env |
 | `OPENAI_API_KEY` | (env var) | OpenClaw reads directly from env |
 | `CLOUDFLARE_AI_GATEWAY_API_KEY` | (env var) | Native AI Gateway key |
@@ -269,3 +273,77 @@ R2 is mounted via s3fs at `/data/moltbot`. Important gotchas:
 - **Process status**: The sandbox API's `proc.status` may not update immediately after a process completes. Instead of checking `proc.status === 'completed'`, verify success by checking for expected output (e.g., timestamp file exists after sync).
 
 - **R2 prefix migration**: Backups are now stored under `openclaw/` prefix in R2 (was `clawdbot/`). The startup script handles restoring from both old and new prefixes with automatic migration.
+
+## Config Sync Runbook
+
+The OpenClaw config (`openclaw-config.json`) is gitignored. R2 is the source of truth. Secrets (tokens, API keys) are injected at runtime by `start-openclaw.sh`.
+
+### Workflow: Local Edit → R2 → Container
+
+#### 1. Edit config locally
+
+```bash
+# The local reference file (gitignored):
+$EDITOR agents/openclaw-config.json
+```
+
+> Never commit secrets to this file. Tokens are injected at runtime from env vars.
+
+#### 2. Push to R2
+
+```bash
+npx wrangler r2 object put moltbot-data/openclaw/openclaw.json \
+  --file agents/openclaw-config.json --remote
+```
+
+#### 3. Pull in container (rclone sync)
+
+Hit the debug CLI endpoint to rclone the updated config from R2 into the container:
+
+```text
+GET https://paclaw.pingaura.workers.dev/debug/cli?cmd=rclone copy r2:moltbot-data/openclaw/openclaw.json /root/.openclaw/ --config /root/.config/rclone/rclone.conf
+```
+
+#### 4. Restart the gateway
+
+```text
+GET https://paclaw.pingaura.workers.dev/debug/cli?cmd=openclaw gateway restart
+```
+
+#### 5. Verify config is loaded correctly
+
+```text
+GET https://paclaw.pingaura.workers.dev/debug/container-config
+```
+
+Check that:
+
+- `agents.list` has the expected agents (no stale entries)
+- Per-agent `skills` are arrays (not objects)
+- `channels.slack.allowFrom` is at the top level
+- Models list includes all expected models (gpt-4o, gpt-4.1, gpt-5.2)
+- No unknown config key warnings in gateway logs
+
+#### 6. (Optional) Check gateway logs for doctor warnings
+
+```text
+GET https://paclaw.pingaura.workers.dev/debug/logs
+```
+
+Look for "Config invalid" or "Unknown config keys" in the output.
+
+### Backup before pushing
+
+Before overwriting R2, take a backup:
+
+```bash
+npx wrangler r2 object get moltbot-data/openclaw/openclaw.json \
+  --file /tmp/openclaw-backup-$(date +%Y%m%d).json --remote
+```
+
+### Key notes
+
+- `agents/openclaw-config.json` is in `.gitignore` — never committed
+- Container config at runtime includes injected secrets (tokens, keys) — the R2 copy should NOT contain secrets
+- `start-openclaw.sh` patches the R2 config at boot with env var secrets, gateway auth, CDP browser profiles, and skill/subagent assignments
+- After deploying new code (e.g. updated `start-openclaw.sh`), re-push config to R2 and restart to pick up changes
