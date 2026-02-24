@@ -49,19 +49,34 @@ export async function findExistingMoltbotProcess(sandbox: Sandbox): Promise<Proc
   return null;
 }
 
+// Mutex: only one gateway start can be in-flight at a time.
+// All concurrent callers await the same promise.
+let gatewayStartPromise: Promise<Process> | null = null;
+
 /**
  * Ensure the OpenClaw gateway is running
  *
- * This will:
- * 1. Mount R2 storage if configured
- * 2. Check for an existing gateway process
- * 3. Wait for it to be ready, or start a new one
+ * Uses a module-level mutex so concurrent requests during cold start
+ * all await the same startup instead of spawning duplicate processes.
  *
  * @param sandbox - The sandbox instance
  * @param env - Worker environment bindings
  * @returns The running gateway process
  */
 export async function ensureMoltbotGateway(sandbox: Sandbox, env: MoltbotEnv): Promise<Process> {
+  if (gatewayStartPromise) {
+    console.log('[Gateway] Startup already in progress, waiting on existing promise');
+    return gatewayStartPromise;
+  }
+
+  gatewayStartPromise = startGateway(sandbox, env).finally(() => {
+    gatewayStartPromise = null;
+  });
+
+  return gatewayStartPromise;
+}
+
+async function startGateway(sandbox: Sandbox, env: MoltbotEnv): Promise<Process> {
   // Configure rclone for R2 persistence (non-blocking if not configured).
   // The startup script uses rclone to restore data from R2 on boot.
   await ensureRcloneConfig(sandbox, env);
@@ -93,19 +108,6 @@ export async function ensureMoltbotGateway(sandbox: Sandbox, env: MoltbotEnv): P
       } catch (killError) {
         console.log('Failed to kill process:', killError);
       }
-    }
-  }
-
-  // Re-check: another request may have just started a gateway (reduces duplicate starts).
-  const recheckProcess = await findExistingMoltbotProcess(sandbox);
-  if (recheckProcess) {
-    console.log('Found gateway process on re-check:', recheckProcess.id);
-    try {
-      await recheckProcess.waitForPort(MOLTBOT_PORT, { mode: 'tcp', timeout: STARTUP_TIMEOUT_MS });
-      console.log('Gateway is reachable');
-      return recheckProcess;
-    } catch (e) {
-      console.log('Re-checked process not reachable, starting new one:', e);
     }
   }
 

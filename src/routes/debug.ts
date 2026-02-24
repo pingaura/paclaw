@@ -88,10 +88,24 @@ debug.get('/processes', async (c) => {
       return timeB.localeCompare(timeA);
     });
 
-    return c.json({ count: processes.length, processes: processData });
+    const lines = [`count: ${processData.length}`, ''];
+    for (const p of processData) {
+      lines.push(`[${p.id}]`);
+      lines.push(`  command: ${p.command}`);
+      lines.push(`  status: ${p.status}`);
+      if (p.startTime) lines.push(`  startTime: ${p.startTime}`);
+      if (p.endTime) lines.push(`  endTime: ${p.endTime}`);
+      if (p.exitCode !== undefined && p.exitCode !== null) lines.push(`  exitCode: ${p.exitCode}`);
+      if (includeLogs) {
+        lines.push(`  stdout: ${(p.stdout as string) || '(empty)'}`);
+        lines.push(`  stderr: ${(p.stderr as string) || '(empty)'}`);
+      }
+      lines.push('');
+    }
+    return c.text(lines.join('\n'));
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return c.json({ error: errorMessage }, 500);
+    return c.text(`error: ${errorMessage}`, 500);
   }
 });
 
@@ -136,16 +150,21 @@ debug.get('/cli', async (c) => {
 
     const logs = await proc.getLogs();
     const status = proc.getStatus ? await proc.getStatus() : proc.status;
-    return c.json({
-      command: cmd,
-      status,
-      exitCode: proc.exitCode,
-      stdout: logs.stdout || '',
-      stderr: logs.stderr || '',
-    });
+    const text = [
+      `command: ${cmd}`,
+      `status: ${status}`,
+      `exitCode: ${proc.exitCode}`,
+      '',
+      '--- stdout ---',
+      logs.stdout || '(empty)',
+      '',
+      '--- stderr ---',
+      logs.stderr || '(empty)',
+    ].join('\n');
+    return c.text(text);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return c.json({ error: errorMessage, command: cmd }, 500);
+    return c.text(`error: ${errorMessage}\ncommand: ${cmd}`, 500);
   }
 });
 
@@ -160,47 +179,31 @@ debug.get('/logs', async (c) => {
       const processes = await sandbox.listProcesses();
       process = processes.find((p) => p.id === processId);
       if (!process) {
-        return c.json(
-          {
-            status: 'not_found',
-            message: `Process ${processId} not found`,
-            stdout: '',
-            stderr: '',
-          },
-          404,
-        );
+        return c.text(`status: not_found\nmessage: Process ${processId} not found`, 404);
       }
     } else {
       process = await findExistingMoltbotProcess(sandbox);
       if (!process) {
-        return c.json({
-          status: 'no_process',
-          message: 'No Moltbot process is currently running',
-          stdout: '',
-          stderr: '',
-        });
+        return c.text('status: no_process\nmessage: No Moltbot process is currently running');
       }
     }
 
     const logs = await process.getLogs();
-    return c.json({
-      status: 'ok',
-      process_id: process.id,
-      process_status: process.status,
-      stdout: logs.stdout || '',
-      stderr: logs.stderr || '',
-    });
+    const text = [
+      `status: ok`,
+      `process_id: ${process.id}`,
+      `process_status: ${process.status}`,
+      '',
+      '--- stdout ---',
+      logs.stdout || '(empty)',
+      '',
+      '--- stderr ---',
+      logs.stderr || '(empty)',
+    ].join('\n');
+    return c.text(text);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return c.json(
-      {
-        status: 'error',
-        message: `Failed to get logs: ${errorMessage}`,
-        stdout: '',
-        stderr: '',
-      },
-      500,
-    );
+    return c.text(`status: error\nmessage: Failed to get logs: ${errorMessage}`, 500);
   }
 });
 
