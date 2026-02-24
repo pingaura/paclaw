@@ -150,6 +150,9 @@ async function sendTaskViaWebSocket(
           role: 'operator',
           scopes: [] as string[],
           caps: [] as string[],
+          // Device identity required since OpenClaw 2026.2.23
+          deviceId: 'abhiyan-orchestrator',
+          pairingToken: env.MOLTBOT_GATEWAY_TOKEN || '',
         },
       };
       ws.send(JSON.stringify(connectFrame));

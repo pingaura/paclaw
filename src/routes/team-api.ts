@@ -354,6 +354,9 @@ teamApi.post('/send-message', async (c) => {
             role: 'operator',
             scopes: [],
             caps: [],
+            // Device identity required since OpenClaw 2026.2.23
+            deviceId: 'abhiyan-team-chat',
+            pairingToken: env.MOLTBOT_GATEWAY_TOKEN || '',
           },
         }));
       }

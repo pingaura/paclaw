@@ -335,6 +335,8 @@ app.all('*', async (c) => {
     }
 
     // Relay messages from client to container
+    // Intercept the protocol v3 connect frame to inject device identity
+    // (required since OpenClaw 2026.2.23: DEVICE_IDENTITY_REQUIRED)
     serverWs.addEventListener('message', (event) => {
       if (debugLogs) {
         console.log(
@@ -343,8 +345,28 @@ app.all('*', async (c) => {
           typeof event.data === 'string' ? event.data.slice(0, 200) : '(binary)',
         );
       }
+      let data = event.data;
+      if (typeof data === 'string') {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.type === 'req' && parsed.method === 'connect' && parsed.params) {
+            // Inject device identity so the gateway accepts the connection
+            parsed.params.deviceId = 'abhiyan-team-dashboard';
+            // Pass gateway token as pairing token to satisfy operator.admin scope
+            if (c.env.MOLTBOT_GATEWAY_TOKEN) {
+              parsed.params.pairingToken = c.env.MOLTBOT_GATEWAY_TOKEN;
+            }
+            data = JSON.stringify(parsed);
+            if (debugLogs) {
+              console.log('[WS] Injected deviceId and pairingToken into connect frame');
+            }
+          }
+        } catch {
+          // Not JSON, pass through
+        }
+      }
       if (containerWs.readyState === WebSocket.OPEN) {
-        containerWs.send(event.data);
+        containerWs.send(data);
       } else if (debugLogs) {
         console.log('[WS] Container not open, readyState:', containerWs.readyState);
       }

@@ -393,6 +393,58 @@ if (!config.skills.load.extraDirs.includes('/root/clawd/skills')) {
     console.log('Added /root/clawd/skills to skills.load.extraDirs');
 }
 
+// ── Agent subagents allowlists & per-agent skills ──
+// Each agent needs subagents.allowAgents to message other agents (required since 2026.2.23)
+// and per-agent skills so abhiyan/cloudflare-browser are discoverable from each workspace.
+const allAgentIds = ['sage', 'atlas', 'forge', 'pixel', 'harbor', 'sentinel', 'aegis', 'scribe'];
+
+// Coordination map: who can each agent talk to (based on pipeline in AGENTS.md)
+const allowMap = {
+    sage:     ['atlas', 'forge', 'pixel', 'harbor', 'sentinel', 'aegis', 'scribe'],
+    atlas:    ['sage', 'forge', 'pixel', 'harbor'],
+    forge:    ['sage', 'pixel', 'harbor', 'sentinel'],
+    pixel:    ['sage', 'forge', 'harbor', 'sentinel'],
+    harbor:   ['sage', 'forge', 'pixel', 'sentinel', 'aegis'],
+    sentinel: ['sage', 'forge', 'pixel', 'harbor'],
+    aegis:    ['sage', 'forge', 'pixel', 'harbor', 'sentinel'],
+    scribe:   ['sage', 'atlas', 'forge', 'pixel', 'harbor'],
+};
+
+// Agents that need cloudflare-browser (CDP) access:
+// - pixel: UI testing and visual verification
+// - aegis: security auditing (XSS, CSRF, etc.)
+// - sage: oversight and deployment verification
+const browserAgents = ['pixel', 'aegis', 'sage'];
+
+if (config.agents && config.agents.list) {
+    for (const agent of config.agents.list) {
+        if (!agent.id || !allAgentIds.includes(agent.id)) continue;
+
+        // Set subagents allowlist
+        agent.subagents = agent.subagents || {};
+        agent.subagents.allowAgents = allowMap[agent.id] || [];
+
+        // Enable abhiyan skill per-agent so each workspace can discover it
+        agent.skills = agent.skills || {};
+        agent.skills.entries = agent.skills.entries || {};
+        if (!agent.skills.entries['abhiyan']) {
+            agent.skills.entries['abhiyan'] = { enabled: true };
+        }
+
+        // Enable cloudflare-browser for agents that need CDP access
+        if (browserAgents.includes(agent.id) && process.env.CDP_SECRET && process.env.WORKER_URL) {
+            if (!agent.skills.entries['cloudflare-browser']) {
+                agent.skills.entries['cloudflare-browser'] = { enabled: true };
+            }
+        } else {
+            // Explicitly disable for agents that don't need it
+            agent.skills.entries['cloudflare-browser'] = { enabled: false };
+        }
+
+        console.log('Agent ' + agent.id + ': allowAgents=' + JSON.stringify(agent.subagents.allowAgents) + ' browser=' + browserAgents.includes(agent.id));
+    }
+}
+
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 console.log('Configuration patched successfully');
 EOFPATCH
