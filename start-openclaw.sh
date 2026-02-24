@@ -384,6 +384,17 @@ if (!config.skills.entries['abhiyan']) {
     console.log('abhiyan skill already configured, skipping');
 }
 
+// Register methodology skills (tdd, planning, executing-tasks, code-review, debugging, workspace-lifecycle, orchestrator-protocol)
+const methodologySkills = ['tdd', 'planning', 'executing-tasks', 'code-review', 'debugging', 'workspace-lifecycle', 'orchestrator-protocol'];
+for (const skillName of methodologySkills) {
+    if (!config.skills.entries[skillName]) {
+        config.skills.entries[skillName] = { enabled: true };
+        console.log('Registered ' + skillName + ' skill');
+    } else {
+        console.log(skillName + ' skill already configured, skipping');
+    }
+}
+
 // Ensure agents can discover custom skills in /root/clawd/skills/
 // Each agent has its own workspace, so without extraDirs they can't find custom skills.
 config.skills.load = config.skills.load || {};
@@ -416,6 +427,21 @@ const allowMap = {
 // - sage: oversight and deployment verification
 const browserAgents = ['pixel', 'aegis', 'sage'];
 
+// Per-agent skill map: which methodology skills each agent gets
+const agentSkillMap = {
+    sage:     ['abhiyan', 'cloudflare-browser', 'planning', 'orchestrator-protocol'],
+    atlas:    ['abhiyan', 'planning'],
+    forge:    ['abhiyan', 'tdd', 'executing-tasks', 'code-review', 'debugging', 'workspace-lifecycle'],
+    pixel:    ['abhiyan', 'cloudflare-browser', 'tdd', 'executing-tasks', 'code-review', 'debugging', 'workspace-lifecycle'],
+    harbor:   ['abhiyan', 'tdd', 'executing-tasks', 'code-review', 'debugging', 'workspace-lifecycle'],
+    sentinel: ['abhiyan', 'code-review', 'tdd'],
+    aegis:    ['abhiyan', 'cloudflare-browser'],
+    scribe:   ['abhiyan', 'executing-tasks'],
+};
+
+const allSkills = ['abhiyan', 'cloudflare-browser', 'tdd', 'planning', 'executing-tasks',
+                   'code-review', 'debugging', 'workspace-lifecycle', 'orchestrator-protocol'];
+
 if (config.agents && config.agents.list) {
     for (const agent of config.agents.list) {
         if (!agent.id || !allAgentIds.includes(agent.id)) continue;
@@ -424,24 +450,26 @@ if (config.agents && config.agents.list) {
         agent.subagents = agent.subagents || {};
         agent.subagents.allowAgents = allowMap[agent.id] || [];
 
-        // Enable abhiyan skill per-agent so each workspace can discover it
+        // Set per-agent skills from the skill map
         agent.skills = agent.skills || {};
         agent.skills.entries = agent.skills.entries || {};
-        if (!agent.skills.entries['abhiyan']) {
-            agent.skills.entries['abhiyan'] = { enabled: true };
-        }
+        const enabledSkills = agentSkillMap[agent.id] || ['abhiyan'];
 
-        // Enable cloudflare-browser for agents that need CDP access
-        if (browserAgents.includes(agent.id) && process.env.CDP_SECRET && process.env.WORKER_URL) {
-            if (!agent.skills.entries['cloudflare-browser']) {
-                agent.skills.entries['cloudflare-browser'] = { enabled: true };
+        for (const skillName of allSkills) {
+            if (enabledSkills.includes(skillName)) {
+                // cloudflare-browser requires env vars to be useful
+                if (skillName === 'cloudflare-browser' && !(process.env.CDP_SECRET && process.env.WORKER_URL)) {
+                    agent.skills.entries[skillName] = { enabled: false };
+                } else {
+                    agent.skills.entries[skillName] = { enabled: true };
+                }
+            } else {
+                agent.skills.entries[skillName] = { enabled: false };
             }
-        } else {
-            // Explicitly disable for agents that don't need it
-            agent.skills.entries['cloudflare-browser'] = { enabled: false };
         }
 
-        console.log('Agent ' + agent.id + ': allowAgents=' + JSON.stringify(agent.subagents.allowAgents) + ' browser=' + browserAgents.includes(agent.id));
+        const enabledList = Object.keys(agent.skills.entries).filter(k => agent.skills.entries[k].enabled);
+        console.log('Agent ' + agent.id + ': allowAgents=' + JSON.stringify(agent.subagents.allowAgents) + ' skills=' + JSON.stringify(enabledList));
     }
 }
 

@@ -22,6 +22,7 @@ export default function TeamApp() {
   } = useProjects();
 
   const [activityOpen, setActivityOpen] = useState(true);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
   const [chatActivities, setChatActivities] = useState<ActivityItem[]>([]);
 
   const handleChatSend = useCallback((item: ActivityItem) => {
@@ -114,9 +115,13 @@ export default function TeamApp() {
         </div>
       </div>
 
-      {/* Pipeline at the bottom */}
-      <div className="ab-pipeline">
-        <PipelineView agentStates={agentStates} />
+      {/* Collapsible pipeline at the bottom */}
+      <div className={`ab-pipeline ${pipelineOpen ? 'ab-pipeline-open' : 'ab-pipeline-closed'}`}>
+        <button className="ab-pipeline-toggle" onClick={() => setPipelineOpen(!pipelineOpen)}>
+          <span className="ab-pipeline-toggle-label">Pipeline</span>
+          <span className={`ab-pipeline-toggle-icon ${pipelineOpen ? 'ab-pipeline-toggle-up' : ''}`}>&#x25B2;</span>
+        </button>
+        {pipelineOpen && <PipelineView agentStates={agentStates} />}
       </div>
     </div>
   );
