@@ -325,10 +325,19 @@ if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN) {
     if (config.channels.slack.dm && config.channels.slack.dm.policy) {
         config.channels.slack.dmPolicy = config.channels.slack.dmPolicy || config.channels.slack.dm.policy;
         delete config.channels.slack.dm.policy;
-        if (Object.keys(config.channels.slack.dm).length === 0) {
-            delete config.channels.slack.dm;
-        }
         console.log('Migrated Slack dm.policy → dmPolicy');
+    }
+
+    // Migrate dm.allowFrom → allowFrom (moved to top-level in 2026.2.24)
+    if (config.channels.slack.dm && config.channels.slack.dm.allowFrom) {
+        config.channels.slack.allowFrom = config.channels.slack.allowFrom || config.channels.slack.dm.allowFrom;
+        delete config.channels.slack.dm.allowFrom;
+        console.log('Migrated Slack dm.allowFrom → allowFrom');
+    }
+
+    // Clean up empty dm object after migrations
+    if (config.channels.slack.dm && Object.keys(config.channels.slack.dm).length === 0) {
+        delete config.channels.slack.dm;
     }
 }
 

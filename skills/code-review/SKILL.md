@@ -21,7 +21,7 @@ description: Structured code review discipline. Section A covers performing revi
 ### Severity Classification
 
 | Severity | Definition | Must Fix |
-|----------|-----------|----------|
+| -------- | --------- | -------- |
 | **Critical** | Security vulnerability, data loss, crash in production path | YES — blocks merge |
 | **Major** | Incorrect behavior, missing error handling, logic error | YES — blocks merge |
 | **Minor** | Code smell, suboptimal pattern, missing edge case test | No — recommended |
@@ -30,7 +30,8 @@ description: Structured code review discipline. Section A covers performing revi
 ### Review Output Format
 
 For each file:
-```
+
+```markdown
 ### src/path/to/file.ts
 
 - CRITICAL: SQL injection in user input concatenation (line 45)
@@ -47,7 +48,8 @@ For each file:
 ```
 
 Summary:
-```
+
+```markdown
 | Severity | Count | Blocks Merge |
 |----------|-------|--------------|
 | Critical | 0     | —            |
@@ -66,6 +68,7 @@ Summary:
 ### Non-Negotiable Checks
 
 Always verify:
+
 - No hardcoded secrets, API keys, or tokens
 - No SQL injection, XSS, or command injection vectors
 - Error handling exists for all external calls (APIs, DB, filesystem)
