@@ -7,11 +7,15 @@ description: Manage projects and tasks via local filesystem. Data syncs to R2 au
 
 Local filesystem-based project and task management that syncs to the Abhiyan dashboard via R2.
 
+## IMPORTANT — How to Use This Skill
+
+Just run the commands below. Do NOT look for an `abhiyan/` directory in your workspace — the data directory is separate from your workspace and is created automatically on first use. You only need `node` available in your PATH.
+
 ## Data Directory
 
-Default: `/root/clawd/abhiyan/` (override with `ABHIYAN_DIR` env var)
+Default: `/root/clawd/abhiyan/` (override with `ABHIYAN_DIR` env var). This directory is created automatically when you run any command — no manual setup needed.
 
-```
+```text
 /root/clawd/abhiyan/
 ├── index.json
 └── projects/{id}/
@@ -21,42 +25,44 @@ Default: `/root/clawd/abhiyan/` (override with `ABHIYAN_DIR` env var)
 
 ## Commands
 
+All commands use absolute paths. Run them from any working directory.
+
 ### Projects
 
 ```bash
 # List all projects
-node skills/abhiyan/scripts/abhiyan.cjs projects list
+node /root/clawd/skills/abhiyan/scripts/abhiyan.cjs projects list
 
 # Create a project
-node skills/abhiyan/scripts/abhiyan.cjs projects create --name "My Project" --description "Details" --color "#60a5fa"
+node /root/clawd/skills/abhiyan/scripts/abhiyan.cjs projects create --name "My Project" --description "Details" --color "#60a5fa"
 
 # Get project details
-node skills/abhiyan/scripts/abhiyan.cjs projects get <projectId>
+node /root/clawd/skills/abhiyan/scripts/abhiyan.cjs projects get <projectId>
 
 # Update a project
-node skills/abhiyan/scripts/abhiyan.cjs projects update <projectId> --name "New Name" --status paused
+node /root/clawd/skills/abhiyan/scripts/abhiyan.cjs projects update <projectId> --name "New Name" --status paused
 
 # Archive a project
-node skills/abhiyan/scripts/abhiyan.cjs projects archive <projectId>
+node /root/clawd/skills/abhiyan/scripts/abhiyan.cjs projects archive <projectId>
 ```
 
 ### Tasks
 
 ```bash
 # List tasks for a project
-node skills/abhiyan/scripts/abhiyan.cjs tasks list <projectId>
+node /root/clawd/skills/abhiyan/scripts/abhiyan.cjs tasks list <projectId>
 
 # Create a task
-node skills/abhiyan/scripts/abhiyan.cjs tasks create <projectId> --title "Implement auth" --priority high --status todo --assignedAgents forge,sentinel
+node /root/clawd/skills/abhiyan/scripts/abhiyan.cjs tasks create <projectId> --title "Implement auth" --priority high --status todo --assignedAgents forge,sentinel
 
 # Update a task
-node skills/abhiyan/scripts/abhiyan.cjs tasks update <projectId> <taskId> --status in_progress --assignedAgents forge
+node /root/clawd/skills/abhiyan/scripts/abhiyan.cjs tasks update <projectId> <taskId> --status in_progress --assignedAgents forge
 
 # Move task to new status
-node skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status done
+node /root/clawd/skills/abhiyan/scripts/abhiyan.cjs tasks move <projectId> <taskId> --status done
 
 # Delete a task
-node skills/abhiyan/scripts/abhiyan.cjs tasks delete <projectId> <taskId>
+node /root/clawd/skills/abhiyan/scripts/abhiyan.cjs tasks delete <projectId> <taskId>
 ```
 
 ## Task Statuses
