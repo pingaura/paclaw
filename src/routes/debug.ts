@@ -7,6 +7,14 @@ import { findExistingMoltbotProcess, waitForProcess } from '../gateway';
  * Note: These routes should be protected by Cloudflare Access middleware
  * when mounted in the main app
  */
+const DEFAULT_TZ = 'Asia/Kolkata';
+
+function formatTime(date: Date | string | undefined, tz: string): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleString('en-IN', { timeZone: tz, hour12: false });
+}
+
 const debug = new Hono<AppEnv>();
 
 // GET /debug/version - Returns version info from inside the container
@@ -25,13 +33,10 @@ debug.get('/version', async (c) => {
     const nodeLogs = await nodeProcess.getLogs();
     const nodeVersion = (nodeLogs.stdout || '').trim();
 
-    return c.json({
-      moltbot_version: moltbotVersion,
-      node_version: nodeVersion,
-    });
+    return c.text(`openclaw: ${moltbotVersion}\nnode: ${nodeVersion}`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return c.json({ status: 'error', message: `Failed to get version info: ${errorMessage}` }, 500);
+    return c.text(`error: Failed to get version info: ${errorMessage}`, 500);
   }
 });
 
@@ -41,6 +46,7 @@ debug.get('/processes', async (c) => {
   try {
     const processes = await sandbox.listProcesses();
     const includeLogs = c.req.query('logs') === 'true';
+    const tz = c.req.query('tz') || DEFAULT_TZ;
 
     const processData = await Promise.all(
       processes.map(async (p) => {
@@ -48,8 +54,8 @@ debug.get('/processes', async (c) => {
           id: p.id,
           command: p.command,
           status: p.status,
-          startTime: p.startTime?.toISOString(),
-          endTime: p.endTime?.toISOString(),
+          startTime: formatTime(p.startTime, tz),
+          endTime: formatTime(p.endTime, tz),
           exitCode: p.exitCode,
         };
 
@@ -127,15 +133,19 @@ debug.get('/gateway-api', async (c) => {
       body = await response.text();
     }
 
-    return c.json({
-      path,
-      status: response.status,
-      contentType,
-      body,
-    });
+    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
+    const text = [
+      `path: ${path}`,
+      `status: ${response.status}`,
+      `contentType: ${contentType}`,
+      '',
+      '--- body ---',
+      bodyStr,
+    ].join('\n');
+    return c.text(text);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return c.json({ error: errorMessage, path }, 500);
+    return c.text(`error: ${errorMessage}\npath: ${path}`, 500);
   }
 });
 
@@ -218,15 +228,10 @@ debug.get('/gateway-log', async (c) => {
     await waitForProcess(proc, 5000);
     const logs = await proc.getLogs();
     const content = (logs.stdout || '').trim() || (logs.stderr || '').trim() || '(empty)';
-    return c.json({
-      status: 'ok',
-      lines_requested: lines,
-      log: content,
-      hint: 'Search for "error", "fail", "401", "429", "timeout" to find why the agent returned empty.',
-    });
+    return c.text(content);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return c.json({ error: errorMessage }, 500);
+    return c.text(`error: ${errorMessage}`, 500);
   }
 });
 
@@ -365,19 +370,20 @@ debug.get('/ws-test', async (c) => {
 
 // GET /debug/env - Show environment configuration (sanitized)
 debug.get('/env', async (c) => {
-  return c.json({
-    has_anthropic_key: !!c.env.ANTHROPIC_API_KEY,
-    has_openai_key: !!c.env.OPENAI_API_KEY,
-    has_gateway_token: !!c.env.MOLTBOT_GATEWAY_TOKEN,
-    has_r2_access_key: !!c.env.R2_ACCESS_KEY_ID,
-    has_r2_secret_key: !!c.env.R2_SECRET_ACCESS_KEY,
-    has_cf_account_id: !!c.env.CF_ACCOUNT_ID,
-    dev_mode: c.env.DEV_MODE,
-    debug_routes: c.env.DEBUG_ROUTES,
-    bind_mode: 'lan',
-    cf_access_team_domain: c.env.CF_ACCESS_TEAM_DOMAIN,
-    has_cf_access_aud: !!c.env.CF_ACCESS_AUD,
-  });
+    const lines = [
+      `anthropic_key: ${c.env.ANTHROPIC_API_KEY ? 'yes' : 'no'}`,
+      `openai_key: ${c.env.OPENAI_API_KEY ? 'yes' : 'no'}`,
+      `gateway_token: ${c.env.MOLTBOT_GATEWAY_TOKEN ? 'yes' : 'no'}`,
+      `r2_access_key: ${c.env.R2_ACCESS_KEY_ID ? 'yes' : 'no'}`,
+      `r2_secret_key: ${c.env.R2_SECRET_ACCESS_KEY ? 'yes' : 'no'}`,
+      `cf_account_id: ${c.env.CF_ACCOUNT_ID ? 'yes' : 'no'}`,
+      `dev_mode: ${c.env.DEV_MODE || 'not set'}`,
+      `debug_routes: ${c.env.DEBUG_ROUTES || 'not set'}`,
+      `bind_mode: lan`,
+      `cf_access_team_domain: ${c.env.CF_ACCESS_TEAM_DOMAIN || 'not set'}`,
+      `cf_access_aud: ${c.env.CF_ACCESS_AUD ? 'yes' : 'no'}`,
+    ];
+    return c.text(lines.join('\n'));
 });
 
 // GET /debug/container-config - Read the moltbot config from inside the container
@@ -392,23 +398,21 @@ debug.get('/container-config', async (c) => {
     const stdout = logs.stdout || '';
     const stderr = logs.stderr || '';
 
-    let config = null;
+    let pretty = stdout;
     try {
-      config = JSON.parse(stdout);
+      pretty = JSON.stringify(JSON.parse(stdout), null, 2);
     } catch {
-      // Not valid JSON
+      // Not valid JSON, use raw
     }
 
-    return c.json({
-      status: proc.status,
-      exitCode: proc.exitCode,
-      config,
-      raw: config ? undefined : stdout,
-      stderr,
-    });
+    const header = `status: ${proc.status}\n`;
+    if (stderr) {
+      return c.text(`${header}stderr: ${stderr}\n\n${pretty}`);
+    }
+    return c.text(`${header}\n${pretty}`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return c.json({ error: errorMessage }, 500);
+    return c.text(`error: ${errorMessage}`, 500);
   }
 });
 
