@@ -13,26 +13,42 @@ function parseTarget(text: string): string | null {
   return AGENT_IDS.has(id) ? id : null;
 }
 
+/** Filter agents by partial text after @ */
+function filterAgents(text: string) {
+  const atIndex = text.lastIndexOf('@');
+  if (atIndex === -1) return AGENTS;
+  const partial = text.slice(atIndex + 1).toLowerCase();
+  if (!partial) return AGENTS;
+  return AGENTS.filter(
+    (a) => a.id.startsWith(partial) || a.name.toLowerCase().startsWith(partial),
+  );
+}
+
 export interface UseChatInputReturn {
   message: string;
   setMessage: (msg: string) => void;
   targetAgent: string | null;
   showMentionMenu: boolean;
+  filteredAgents: typeof AGENTS;
+  highlightIndex: number;
   sending: boolean;
   error: string | null;
   send: () => Promise<ActivityItem | null>;
   closeMentionMenu: () => void;
   insertMention: (agentId: string) => void;
+  onKeyDown: (e: React.KeyboardEvent) => void;
 }
 
 export function useChatInput(): UseChatInputReturn {
   const [message, setMessage] = useState('');
   const [showMentionMenu, setShowMentionMenu] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(0);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const prevMsgRef = useRef('');
 
   const targetAgent = parseTarget(message);
+  const filteredAgents = showMentionMenu ? filterAgents(message) : AGENTS;
 
   const handleSetMessage = useCallback((msg: string) => {
     setError(null);
@@ -40,14 +56,20 @@ export function useChatInput(): UseChatInputReturn {
     const prev = prevMsgRef.current;
     if (msg.endsWith('@') && !prev.endsWith('@')) {
       setShowMentionMenu(true);
+      setHighlightIndex(0);
     } else if (!msg.includes('@')) {
       setShowMentionMenu(false);
     }
+    // Reset highlight when filter text changes
+    setHighlightIndex(0);
     prevMsgRef.current = msg;
     setMessage(msg);
   }, []);
 
-  const closeMentionMenu = useCallback(() => setShowMentionMenu(false), []);
+  const closeMentionMenu = useCallback(() => {
+    setShowMentionMenu(false);
+    setHighlightIndex(0);
+  }, []);
 
   const insertMention = useCallback((agentId: string) => {
     setMessage((prev) => {
@@ -60,7 +82,28 @@ export function useChatInput(): UseChatInputReturn {
       return next;
     });
     setShowMentionMenu(false);
+    setHighlightIndex(0);
   }, []);
+
+  const onKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!showMentionMenu) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIndex((i) => (i + 1) % filteredAgents.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIndex((i) => (i - 1 + filteredAgents.length) % filteredAgents.length);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      if (filteredAgents.length > 0) {
+        insertMention(filteredAgents[highlightIndex]?.id ?? filteredAgents[0].id);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMentionMenu();
+    }
+  }, [showMentionMenu, filteredAgents, highlightIndex, insertMention, closeMentionMenu]);
 
   const send = useCallback(async (): Promise<ActivityItem | null> => {
     if (sending) return null;
@@ -117,10 +160,13 @@ export function useChatInput(): UseChatInputReturn {
     setMessage: handleSetMessage,
     targetAgent,
     showMentionMenu,
+    filteredAgents,
+    highlightIndex,
     sending,
     error,
     send,
     closeMentionMenu,
     insertMention,
+    onKeyDown,
   };
 }

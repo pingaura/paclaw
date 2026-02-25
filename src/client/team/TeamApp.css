@@ -1319,7 +1319,8 @@
   color: var(--text-primary);
 }
 
-.agent-mention-option:hover {
+.agent-mention-option:hover,
+.agent-mention-active {
   background: var(--surface-hover);
 }
 

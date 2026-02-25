@@ -1,5 +1,4 @@
 import { useRef, useEffect } from 'react';
-import { AGENTS } from '../constants';
 import { useChatInput } from '../hooks/useChatInput';
 import type { ActivityItem } from '../types';
 
@@ -10,10 +9,12 @@ interface AgentChatInputProps {
 export default function AgentChatInput({ onSend }: AgentChatInputProps) {
   const {
     message, setMessage,
-    showMentionMenu, sending, error,
-    send, closeMentionMenu, insertMention,
+    showMentionMenu, filteredAgents, highlightIndex,
+    sending, error,
+    send, closeMentionMenu, insertMention, onKeyDown,
   } = useChatInput();
   const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // Close mention menu on outside click
   useEffect(() => {
@@ -27,6 +28,13 @@ export default function AgentChatInput({ onSend }: AgentChatInputProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, [showMentionMenu, closeMentionMenu]);
 
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (!showMentionMenu || !menuRef.current) return;
+    const active = menuRef.current.children[highlightIndex] as HTMLElement;
+    active?.scrollIntoView({ block: 'nearest' });
+  }, [highlightIndex, showMentionMenu]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const item = await send();
@@ -37,18 +45,18 @@ export default function AgentChatInput({ onSend }: AgentChatInputProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') closeMentionMenu();
+    onKeyDown(e);
   };
 
   return (
     <div className="agent-chat-input">
       <form className="agent-chat-form" onSubmit={handleSubmit}>
-        {showMentionMenu && (
-          <div className="agent-mention-menu">
-            {AGENTS.map((agent) => (
+        {showMentionMenu && filteredAgents.length > 0 && (
+          <div className="agent-mention-menu" ref={menuRef}>
+            {filteredAgents.map((agent, i) => (
               <div
                 key={agent.id}
-                className="agent-mention-option"
+                className={`agent-mention-option${i === highlightIndex ? ' agent-mention-active' : ''}`}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   insertMention(agent.id);
