@@ -582,6 +582,8 @@
 .ab-activity-open .activity-feed {
   max-height: none;
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* ---- Pipeline (bottom, collapsible) ---- */
