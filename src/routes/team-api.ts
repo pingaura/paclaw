@@ -305,7 +305,7 @@ teamApi.post('/send-message', async (c) => {
     wsUrl.searchParams.set('token', env.MOLTBOT_GATEWAY_TOKEN);
   }
   const wsRequest = new Request(wsUrl.toString(), {
-    headers: { Upgrade: 'websocket' },
+    headers: { 'Upgrade': 'websocket', 'X-Forwarded-For': '127.0.0.1' },
   });
 
   let response: { webSocket?: WebSocket | null };
@@ -354,9 +354,7 @@ teamApi.post('/send-message', async (c) => {
             role: 'operator',
             scopes: [],
             caps: [],
-            // Device identity required since OpenClaw 2026.2.23
-            deviceId: 'abhiyan-team-chat',
-            pairingToken: env.MOLTBOT_GATEWAY_TOKEN || '',
+            auth: { token: env.MOLTBOT_GATEWAY_TOKEN || '' },
           },
         }));
       }

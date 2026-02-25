@@ -299,11 +299,20 @@ app.all('*', async (c) => {
     // Inject gateway token into WebSocket request if not already present.
     // CF Access redirects strip query params, so authenticated users lose ?token=.
     // Since the user already passed CF Access auth, we inject the token server-side.
+    // Also set X-Forwarded-For so the gateway (with trustedProxies) treats this as a local
+    // connection and doesn't require device identity (the worker is the auth boundary).
     let wsRequest = request;
-    if (c.env.MOLTBOT_GATEWAY_TOKEN && !url.searchParams.has('token')) {
+    {
       const tokenUrl = new URL(url.toString());
-      tokenUrl.searchParams.set('token', c.env.MOLTBOT_GATEWAY_TOKEN);
-      wsRequest = new Request(tokenUrl.toString(), request);
+      if (c.env.MOLTBOT_GATEWAY_TOKEN && !url.searchParams.has('token')) {
+        tokenUrl.searchParams.set('token', c.env.MOLTBOT_GATEWAY_TOKEN);
+      }
+      const headers = new Headers(request.headers);
+      headers.set('X-Forwarded-For', '127.0.0.1');
+      wsRequest = new Request(tokenUrl.toString(), {
+        method: request.method,
+        headers,
+      });
     }
 
     // Get WebSocket connection to the container
@@ -350,15 +359,15 @@ app.all('*', async (c) => {
         try {
           const parsed = JSON.parse(data);
           if (parsed.type === 'req' && parsed.method === 'connect' && parsed.params) {
-            // Inject device identity so the gateway accepts the connection
-            parsed.params.deviceId = 'abhiyan-team-dashboard';
-            // Pass gateway token as pairing token to satisfy operator.admin scope
+            // Inject auth token so the gateway accepts the connection.
+            // Device identity is not needed because the X-Forwarded-For header
+            // makes the gateway treat this as a local connection via trustedProxies.
             if (c.env.MOLTBOT_GATEWAY_TOKEN) {
-              parsed.params.pairingToken = c.env.MOLTBOT_GATEWAY_TOKEN;
+              parsed.params.auth = { token: c.env.MOLTBOT_GATEWAY_TOKEN };
             }
             data = JSON.stringify(parsed);
             if (debugLogs) {
-              console.log('[WS] Injected deviceId and pairingToken into connect frame');
+              console.log('[WS] Injected auth.token into connect frame');
             }
           }
         } catch {

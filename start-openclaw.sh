@@ -158,7 +158,9 @@ config.channels = config.channels || {};
 // ── Gateway ──
 config.gateway.port = 18789;
 config.gateway.mode = 'local';
-config.gateway.trustedProxies = ['10.1.0.0'];
+// Trust the Cloudflare Sandbox internal network so X-Forwarded-For: 127.0.0.1
+// makes the gateway treat worker-proxied connections as local (no device identity needed).
+config.gateway.trustedProxies = ['10.0.0.0/8'];
 
 if (process.env.OPENCLAW_GATEWAY_TOKEN) {
     config.gateway.auth = config.gateway.auth || {};

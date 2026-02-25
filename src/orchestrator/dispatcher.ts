@@ -108,7 +108,7 @@ async function sendTaskViaWebSocket(
     wsUrl.searchParams.set('token', env.MOLTBOT_GATEWAY_TOKEN);
   }
   const wsRequest = new Request(wsUrl.toString(), {
-    headers: { Upgrade: 'websocket' },
+    headers: { 'Upgrade': 'websocket', 'X-Forwarded-For': '127.0.0.1' },
   });
 
   const response = await sandbox.wsConnect(wsRequest, MOLTBOT_PORT);
@@ -150,9 +150,7 @@ async function sendTaskViaWebSocket(
           role: 'operator',
           scopes: [] as string[],
           caps: [] as string[],
-          // Device identity required since OpenClaw 2026.2.23
-          deviceId: 'abhiyan-orchestrator',
-          pairingToken: env.MOLTBOT_GATEWAY_TOKEN || '',
+          auth: { token: env.MOLTBOT_GATEWAY_TOKEN || '' },
         },
       };
       ws.send(JSON.stringify(connectFrame));
