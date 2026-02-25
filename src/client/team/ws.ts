@@ -16,7 +16,7 @@ export interface WsStatus {
 }
 
 // Close reasons that indicate permanent rejection — no point retrying
-const PERMANENT_REJECTIONS = ['pairing required', 'gateway token', 'unauthorized', 'invalid connect params', 'must be equal to constant', 'protocol mismatch'];
+const PERMANENT_REJECTIONS = ['pairing required', 'gateway token', 'unauthorized', 'invalid connect params', 'must be equal to constant', 'protocol mismatch', 'device identity required'];
 
 export class TeamWebSocket {
   private ws: WebSocket | null = null;
