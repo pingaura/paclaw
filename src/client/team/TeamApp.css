@@ -499,6 +499,7 @@
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
@@ -1140,7 +1141,7 @@
 
 /* ---- Activity Feed ---- */
 .activity-feed {
-  max-height: 400px;
+  max-height: min(400px, 100vh);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1260,6 +1261,7 @@
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   line-height: 1.4;
   font-size: 0.8rem;
