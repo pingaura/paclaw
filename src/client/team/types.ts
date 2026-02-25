@@ -48,6 +48,8 @@ export interface TeamStatusResponse {
 
 export interface TeamActivityResponse {
   items: RestActivityItem[];
+  nextCursor: number | null;
+  nextCursorId: string | null;
 }
 
 // ---- Abhiyan: Project & Task Management ----

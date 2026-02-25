@@ -1147,6 +1147,28 @@
   gap: 2px;
 }
 
+.activity-load-more {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  margin: 0.25rem auto 0.5rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.activity-load-more:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.activity-load-more:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .activity-empty {
   text-align: center;
   color: var(--text-muted);

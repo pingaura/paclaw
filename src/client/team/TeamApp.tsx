@@ -10,8 +10,12 @@ import PipelineView from './components/PipelineView';
 import ActivityFeed from './components/ActivityFeed';
 import AgentChatInput from './components/AgentChatInput';
 import ConnectionStatus from './components/ConnectionStatus';
+import { AGENT_MAP } from './constants';
+import { getTeamActivity } from './api';
 import type { ActivityItem } from './types';
 import './TeamApp.css';
+
+const MAX_OLDER_ACTIVITIES = 500;
 
 export default function TeamApp() {
   const { connected, wsError, activities: wsActivities, agentStates } = useWebSocket();
@@ -25,16 +29,65 @@ export default function TeamApp() {
   const [pipelineOpen, setPipelineOpen] = useState(false);
   const [chatActivities, setChatActivities] = useState<ActivityItem[]>([]);
 
+  // Pagination state for "Load older"
+  const [olderActivities, setOlderActivities] = useState<ActivityItem[]>([]);
+  const [nextCursor, setNextCursor] = useState<number | null>(null);
+  const [nextCursorId, setNextCursorId] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const handleChatSend = useCallback((item: ActivityItem) => {
     setChatActivities((prev) => [...prev, item]);
   }, []);
 
-  // Merge REST + WS + chat activities (dedup by id)
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      // Use compound cursor if we've loaded older pages before;
+      // otherwise derive from the oldest item in current REST activities.
+      let cursor = nextCursor ?? undefined;
+      let cursorId = nextCursorId ?? undefined;
+      if (cursor === undefined && restActivities.length > 0) {
+        const oldest = restActivities.reduce((a, b) => a.timestamp < b.timestamp ? a : b);
+        cursor = oldest.timestamp;
+        cursorId = oldest.id;
+      }
+      const data = await getTeamActivity(30, cursor, cursorId);
+      const enriched: ActivityItem[] = data.items.map((item) => {
+        const agent = AGENT_MAP.get(item.agentId);
+        return {
+          ...item,
+          agentName: agent?.name ?? item.agentId,
+          agentEmoji: agent?.emoji ?? '',
+        };
+      });
+      if (enriched.length === 0) {
+        setHasMore(false);
+      } else {
+        setOlderActivities((prev) => {
+          const combined = [...enriched, ...prev];
+          return combined.length > MAX_OLDER_ACTIVITIES
+            ? combined.slice(0, MAX_OLDER_ACTIVITIES)
+            : combined;
+        });
+        setNextCursor(data.nextCursor);
+        setNextCursorId(data.nextCursorId);
+        setHasMore(data.nextCursor !== null);
+      }
+    } catch {
+      // Best-effort
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMore, nextCursor, nextCursorId, restActivities]);
+
+  // Merge older + REST + WS + chat activities (dedup by id)
   const allActivities = useMemo<ActivityItem[]>(() => {
     const seen = new Set<string>();
     const merged: ActivityItem[] = [];
 
-    for (const items of [restActivities, wsActivities, chatActivities]) {
+    for (const items of [olderActivities, restActivities, wsActivities, chatActivities]) {
       for (const item of items) {
         if (!seen.has(item.id)) {
           seen.add(item.id);
@@ -45,7 +98,7 @@ export default function TeamApp() {
 
     merged.sort((a, b) => a.timestamp - b.timestamp);
     return merged;
-  }, [restActivities, wsActivities, chatActivities]);
+  }, [olderActivities, restActivities, wsActivities, chatActivities]);
 
   const gatewayOk = status?.gateway?.ok ?? false;
 
@@ -108,7 +161,12 @@ export default function TeamApp() {
           </button>
           {activityOpen && (
             <>
-              <ActivityFeed activities={allActivities} />
+              <ActivityFeed
+                activities={allActivities}
+                hasMore={hasMore}
+                loadingMore={loadingMore}
+                onLoadMore={handleLoadMore}
+              />
               <AgentChatInput onSend={handleChatSend} />
             </>
           )}

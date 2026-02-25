@@ -1,8 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { ActivityItem } from '../types';
 
 interface ActivityFeedProps {
   activities: ActivityItem[];
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 }
 
 const TYPE_LABELS: Record<ActivityItem['type'], string> = {
@@ -18,10 +21,12 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-export default function ActivityFeed({ activities }: ActivityFeedProps) {
+export default function ActivityFeed({ activities, hasMore, loadingMore, onLoadMore }: ActivityFeedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
   const prevCountRef = useRef(0);
+  const prevScrollHeightRef = useRef(0);
+  const didPrependRef = useRef(false);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -36,10 +41,32 @@ export default function ActivityFeed({ activities }: ActivityFeedProps) {
     return () => el.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    if (autoScrollRef.current && containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+  // Capture scroll height before React commits DOM changes from prepend
+  if (containerRef.current && activities.length > prevCountRef.current) {
+    const oldFirst = prevCountRef.current > 0 ? activities[0] : null;
+    // If the first item changed, items were prepended (not appended)
+    if (oldFirst && prevCountRef.current > 0) {
+      prevScrollHeightRef.current = containerRef.current.scrollHeight;
+      didPrependRef.current = true;
     }
+  }
+
+  // Preserve scroll position when older items are prepended at the top
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    if (didPrependRef.current && prevScrollHeightRef.current > 0) {
+      const delta = el.scrollHeight - prevScrollHeightRef.current;
+      if (delta > 0) {
+        el.scrollTop += delta;
+      }
+      didPrependRef.current = false;
+      prevScrollHeightRef.current = 0;
+    } else if (autoScrollRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+
     prevCountRef.current = activities.length;
   }, [activities]);
 
@@ -50,6 +77,15 @@ export default function ActivityFeed({ activities }: ActivityFeedProps) {
     <section className="team-section">
       <h2 className="section-title">Activity</h2>
       <div className="activity-feed" ref={containerRef}>
+        {hasMore && (
+          <button
+            className="activity-load-more"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? 'Loading...' : 'Load older'}
+          </button>
+        )}
         {activities.length === 0 ? (
           <div className="activity-empty">No activity yet. Waiting for agent messages...</div>
         ) : (

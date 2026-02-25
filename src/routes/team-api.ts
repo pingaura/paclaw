@@ -126,12 +126,29 @@ function extractFromJson(raw: unknown): {
   return { agent, type, summary, timestamp };
 }
 
+/**
+ * Deterministic hash of a string for stable activity IDs across requests.
+ * Same log line always produces the same hash, preventing dedup failures.
+ */
+function stableHash(str: string): string {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
+}
+
 function parseLogLine(line: string, index: number): ParsedActivity | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
 
-  // Default timestamp based on line index (older lines first)
-  let timestamp = Date.now() - (index * 1000);
+  const lineHash = stableHash(trimmed);
+
+  // Default timestamp: use index as an offset from a fixed epoch so it's
+  // deterministic for the same tail output (same line = same index = same ts).
+  // Lines without real timestamps will cluster near epoch 0, which is fine for
+  // ordering since they sort before any real timestamp.
+  let timestamp = index;
 
   // Extract ISO timestamp from anywhere in the line
   const isoMatch = trimmed.match(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/);
@@ -146,9 +163,10 @@ function parseLogLine(line: string, index: number): ParsedActivity | null {
       const json = JSON.parse(trimmed);
       const result = extractFromJson(json);
       if (result) {
+        const ts = result.timestamp || timestamp;
         return {
-          id: `log-${result.timestamp || timestamp}-${result.agent}`,
-          timestamp: result.timestamp || timestamp,
+          id: `log-${lineHash}`,
+          timestamp: ts,
           agentId: result.agent!,
           type: result.type,
           summary: result.summary,
@@ -192,7 +210,7 @@ function parseLogLine(line: string, index: number): ParsedActivity | null {
   summary = summary.length > 200 ? summary.slice(0, 197) + '...' : summary;
 
   return {
-    id: `log-${timestamp}-${matchedAgent}`,
+    id: `log-${lineHash}`,
     timestamp,
     agentId: matchedAgent,
     type,
@@ -251,12 +269,20 @@ teamApi.get('/status', async (c) => {
 });
 
 // GET /api/team/activity - Returns parsed gateway log lines as activity items
+// Supports cursor-based pagination:
+//   ?limit=20         — max items to return (default 30, max 100)
+//   ?before=<ts>      — cursor: only items with timestamp < this value
+//   ?before_id=<id>   — tie-breaker: exclude this ID when timestamps match
 teamApi.get('/activity', async (c) => {
   const sandbox = c.get('sandbox');
-  // lineCount is safe: parseInt guarantees a number, clamped to [1, 1000]
-  const lineCount = Math.min(Math.max(parseInt(c.req.query('lines') || '200', 10), 1), 1000);
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '30', 10), 1), 100);
+  const beforeCursor = c.req.query('before') ? parseInt(c.req.query('before')!, 10) : null;
+  const beforeId = c.req.query('before_id') || null;
+  // Heuristic: read limit*20 lines because roughly 5-10% of raw log lines
+  // parse into valid activity items. Cap at 2000 to avoid slow reads.
+  const lineCount = Math.min(limit * 20, 2000);
 
-  const items: ParsedActivity[] = [];
+  const allParsed: ParsedActivity[] = [];
   try {
     const proc = await sandbox.startProcess(
       `sh -c 'tail -n ${lineCount} /tmp/openclaw/openclaw-*.log 2>/dev/null || echo ""'`,
@@ -270,7 +296,7 @@ teamApi.get('/activity', async (c) => {
       for (let i = 0; i < lines.length; i++) {
         const parsed = parseLogLine(lines[i], i);
         if (parsed) {
-          items.push(parsed);
+          allParsed.push(parsed);
         }
       }
     }
@@ -278,7 +304,26 @@ teamApi.get('/activity', async (c) => {
     // Best-effort
   }
 
-  return c.json({ items });
+  // Sort chronologically (oldest first)
+  allParsed.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Apply cursor filter — use compound cursor (timestamp + id) to avoid
+  // skipping items that share the same timestamp at page boundaries.
+  let filtered = allParsed;
+  if (beforeCursor !== null) {
+    filtered = allParsed.filter((item) =>
+      item.timestamp < beforeCursor ||
+      (item.timestamp === beforeCursor && beforeId !== null && item.id !== beforeId),
+    );
+  }
+
+  // Take the most recent `limit` items (tail of the sorted array)
+  const hasMore = filtered.length > limit;
+  const items = filtered.slice(-limit);
+  const nextCursor = hasMore ? items[0].timestamp : null;
+  const nextCursorId = hasMore ? items[0].id : null;
+
+  return c.json({ items, nextCursor, nextCursorId });
 });
 
 // POST /api/team/send-message — Send a message to an agent via the gateway

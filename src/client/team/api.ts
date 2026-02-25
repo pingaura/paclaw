@@ -55,8 +55,15 @@ export async function getTeamStatus(): Promise<TeamStatusResponse> {
   return teamRequest<TeamStatusResponse>('/status');
 }
 
-export async function getTeamActivity(lines = 200): Promise<TeamActivityResponse> {
-  return teamRequest<TeamActivityResponse>(`/activity?lines=${lines}`);
+export async function getTeamActivity(
+  limit = 30,
+  before?: number,
+  beforeId?: string,
+): Promise<TeamActivityResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (before !== undefined) params.set('before', String(before));
+  if (beforeId !== undefined) params.set('before_id', beforeId);
+  return teamRequest<TeamActivityResponse>(`/activity?${params}`);
 }
 
 // Projects
