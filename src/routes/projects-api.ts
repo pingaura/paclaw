@@ -44,19 +44,37 @@ projectsApi.get('/', async (c) => {
 // POST / - Create project
 projectsApi.post('/', async (c) => {
   const bucket = c.env.MOLTBOT_BUCKET;
-  const body = await c.req.json<{ name: string; description: string; color: string }>();
+  const body = await c.req.json<{
+    name: string;
+    description: string;
+    color: string;
+    techStack?: string[];
+    instructions?: string;
+    contextFiles?: string[];
+    tags?: string[];
+    links?: { label: string; url: string }[];
+  }>();
 
   if (!body.name?.trim()) {
     return c.json({ error: 'Project name is required' }, 400);
   }
 
   const now = Date.now();
+  const id = generateId();
   const project: Project = {
-    id: generateId(),
+    id,
     name: body.name.trim(),
     description: body.description?.trim() || '',
     status: 'active',
     color: body.color || '#60a5fa',
+    repoPath: `/root/clawd/projects/${id}`,
+    defaultBranch: 'main',
+    techStack: Array.isArray(body.techStack) ? body.techStack : [],
+    instructions: typeof body.instructions === 'string' ? body.instructions : '',
+    contextFiles: Array.isArray(body.contextFiles) ? body.contextFiles : [],
+    tags: Array.isArray(body.tags) ? body.tags : [],
+    links: Array.isArray(body.links) ? body.links : [],
+    lastBundledAt: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -94,6 +112,11 @@ projectsApi.put('/:id', async (c) => {
     project.status = body.status;
   }
   if (body.color !== undefined) project.color = body.color;
+  if (Array.isArray(body.techStack)) project.techStack = body.techStack;
+  if (typeof body.instructions === 'string') project.instructions = body.instructions;
+  if (Array.isArray(body.contextFiles)) project.contextFiles = body.contextFiles;
+  if (Array.isArray(body.tags)) project.tags = body.tags;
+  if (Array.isArray(body.links)) project.links = body.links;
   project.updatedAt = Date.now();
 
   await saveProject(bucket, project);
@@ -150,6 +173,7 @@ projectsApi.post('/:id/tasks', async (c) => {
     priority?: Task['priority'];
     assignedAgents?: string[];
     pipelineStage?: number | null;
+    approvalRequired?: boolean;
   }>();
 
   if (!body.title?.trim()) {
@@ -165,6 +189,8 @@ projectsApi.post('/:id/tasks', async (c) => {
     priority: body.priority || 'medium',
     assignedAgents: body.assignedAgents || [],
     pipelineStage: body.pipelineStage ?? null,
+    branch: null,
+    approvalRequired: body.approvalRequired === true || body.priority === 'critical',
     createdAt: now,
     updatedAt: now,
     completedAt: null,
@@ -220,6 +246,7 @@ projectsApi.put('/:id/tasks/:taskId', async (c) => {
   }
   if (body.assignedAgents !== undefined) task.assignedAgents = body.assignedAgents;
   if (body.pipelineStage !== undefined) task.pipelineStage = body.pipelineStage;
+  if (typeof body.approvalRequired === 'boolean') task.approvalRequired = body.approvalRequired;
   task.updatedAt = Date.now();
 
   await saveTask(bucket, projectId, task);
