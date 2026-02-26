@@ -9,7 +9,7 @@ const crypto = require('crypto');
 
 const ABHIYAN_DIR = process.env.ABHIYAN_DIR || '/root/clawd/abhiyan';
 
-const VALID_TASK_STATUSES = ['backlog', 'todo', 'in_progress', 'review', 'done'];
+const VALID_TASK_STATUSES = ['backlog', 'todo', 'in_progress', 'review', 'needs_approval', 'done'];
 const VALID_PRIORITIES = ['low', 'medium', 'high', 'critical'];
 const VALID_PROJECT_STATUSES = ['active', 'paused', 'completed', 'archived'];
 
@@ -259,6 +259,8 @@ function tasksCreate(projectId, flags) {
     priority: flags.priority || 'medium',
     assignedAgents: flags.assignedAgents ? flags.assignedAgents.split(',') : [],
     pipelineStage: flags.pipelineStage ? parseInt(flags.pipelineStage, 10) : null,
+    branch: null,
+    approvalRequired: flags['approval-required'] === true || flags.priority === 'critical',
     createdAt: now,
     updatedAt: now,
     completedAt: null,
@@ -351,6 +353,51 @@ function tasksDelete(projectId, taskId) {
   console.log(JSON.stringify({ ok: true }));
 }
 
+function projectsInfo(projectId) {
+  const project = getProject(projectId);
+  if (!project) { console.error(`Project not found: ${projectId}`); process.exit(1); }
+  console.log(`Name: ${project.name}`);
+  console.log(`Repo: ${project.repoPath || 'not configured'}`);
+  console.log(`Default Branch: ${project.defaultBranch || 'main'}`);
+  console.log(`Tech Stack: ${(project.techStack || []).join(', ') || 'none'}`);
+  console.log(`Instructions: ${project.instructions || 'none'}`);
+  console.log(`Context Files: ${(project.contextFiles || []).join(', ') || 'none'}`);
+  console.log(`Tags: ${(project.tags || []).join(', ') || 'none'}`);
+  console.log(`Status: ${project.status}`);
+}
+
+function gitStatus(projectId) {
+  const project = getProject(projectId);
+  if (!project) { console.error(`Project not found: ${projectId}`); process.exit(1); }
+  if (!project.repoPath) { console.error('No repo configured for this project'); process.exit(1); }
+  const { execSync } = require('child_process');
+  try {
+    const branch = execSync(`cd ${project.repoPath} && git branch --show-current`, { encoding: 'utf8' }).trim();
+    const status = execSync(`cd ${project.repoPath} && git status --short`, { encoding: 'utf8' }).trim();
+    const log = execSync(`cd ${project.repoPath} && git log --oneline -5`, { encoding: 'utf8' }).trim();
+    console.log(`Branch: ${branch}`);
+    console.log(`Changes:\n${status || '(clean)'}`);
+    console.log(`Recent commits:\n${log}`);
+  } catch (err) {
+    console.error(`Git error: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+function gitBranches(projectId) {
+  const project = getProject(projectId);
+  if (!project) { console.error(`Project not found: ${projectId}`); process.exit(1); }
+  if (!project.repoPath) { console.error('No repo configured for this project'); process.exit(1); }
+  const { execSync } = require('child_process');
+  try {
+    const output = execSync(`cd ${project.repoPath} && git branch -v`, { encoding: 'utf8' }).trim();
+    console.log(output);
+  } catch (err) {
+    console.error(`Git error: ${err.message}`);
+    process.exit(1);
+  }
+}
+
 // ---- Main ----
 
 function main() {
@@ -359,12 +406,13 @@ function main() {
   const action = args[1];   // list | create | get | update | archive | move | delete
 
   if (!resource || !action) {
-    console.error('Usage: abhiyan.cjs <projects|tasks> <action> [args] [--flags]');
+    console.error('Usage: abhiyan.cjs <projects|tasks|git> <action> [args] [--flags]');
     console.error('');
     console.error('Projects:');
     console.error('  projects list');
     console.error('  projects create --name "Name" [--description "..."] [--color "#hex"]');
     console.error('  projects get <id>');
+    console.error('  projects info <id>');
     console.error('  projects update <id> [--name "..."] [--status active|paused|completed|archived]');
     console.error('  projects archive <id>');
     console.error('');
@@ -374,8 +422,16 @@ function main() {
     console.error('  tasks update <projectId> <taskId> [--title "..."] [--status ...] [--priority ...]');
     console.error('  tasks move <projectId> <taskId> --status <newStatus>');
     console.error('  tasks delete <projectId> <taskId>');
+    console.error('');
+    console.error('Git:');
+    console.error('  git status <projectId>');
+    console.error('  git branches <projectId>');
     process.exit(1);
   }
+
+  if (resource === 'projects' && action === 'info') return projectsInfo(args[2]);
+  if (resource === 'git' && action === 'status') return gitStatus(args[2]);
+  if (resource === 'git' && action === 'branches') return gitBranches(args[2]);
 
   if (resource === 'projects') {
     switch (action) {
