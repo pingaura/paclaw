@@ -54,7 +54,7 @@ export interface TeamActivityResponse {
 
 // ---- Abhiyan: Project & Task Management ----
 
-export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done';
+export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'needs_approval' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
 export type ProjectStatus = 'active' | 'paused' | 'completed' | 'archived';
 
@@ -66,6 +66,8 @@ export interface Task {
   priority: TaskPriority;
   assignedAgents: string[];
   pipelineStage: number | null;
+  branch: string | null;
+  approvalRequired: boolean;
   createdAt: number;
   updatedAt: number;
   completedAt: number | null;
@@ -79,6 +81,14 @@ export interface Project {
   color: string;
   createdAt: number;
   updatedAt: number;
+  repoPath: string;
+  defaultBranch: string;
+  techStack: string[];
+  instructions: string;
+  contextFiles: string[];
+  tags: string[];
+  links: { label: string; url: string }[];
+  lastBundledAt: number | null;
 }
 
 /** Project with its tasks loaded (frontend-only, assembled from separate API calls) */
@@ -99,6 +109,10 @@ export interface CreateProjectInput {
   name: string;
   description: string;
   color: string;
+  techStack?: string[];
+  instructions?: string;
+  contextFiles?: string[];
+  tags?: string[];
 }
 
 export interface CreateTaskInput {
@@ -108,9 +122,36 @@ export interface CreateTaskInput {
   priority: TaskPriority;
   assignedAgents: string[];
   pipelineStage: number | null;
+  approvalRequired?: boolean;
 }
 
 export interface SendMessageInput {
   to: string;
   message: string;
+}
+
+// ---- Git-aware types ----
+
+export interface ApprovalItem {
+  taskId: string;
+  projectId: string;
+  title: string;
+  branch: string;
+  agentId: string;
+  diff: DiffSummary;
+  requestedAt: number;
+}
+
+export interface DiffSummary {
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+  files: string[];
+}
+
+export interface BranchInfo {
+  name: string;
+  current: boolean;
+  lastCommit: string;
+  lastCommitAt: number;
 }

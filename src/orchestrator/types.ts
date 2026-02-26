@@ -7,6 +7,7 @@ export interface AgentState {
   currentTaskId: string | null;
   currentProjectId: string | null;
   taskStartedAt: number | null;
+  currentBranch: string | null;
 }
 
 export interface OrchestratorState {
@@ -14,4 +15,6 @@ export interface OrchestratorState {
   agents: Record<string, AgentState>;
   lastRunAt: number;
   lastDispatchAt: number | null;
+  lastBundleRunAt: number | null;
+  cycleCount: number;
 }

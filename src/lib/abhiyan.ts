@@ -14,10 +14,12 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  status: 'backlog' | 'todo' | 'in_progress' | 'review' | 'done';
+  status: 'backlog' | 'todo' | 'in_progress' | 'review' | 'needs_approval' | 'done';
   priority: 'low' | 'medium' | 'high' | 'critical';
   assignedAgents: string[];
   pipelineStage: number | null;
+  branch: string | null;
+  approvalRequired: boolean;
   createdAt: number;
   updatedAt: number;
   completedAt: number | null;
@@ -31,6 +33,14 @@ export interface Project {
   color: string;
   createdAt: number;
   updatedAt: number;
+  repoPath: string;
+  defaultBranch: string;
+  techStack: string[];
+  instructions: string;
+  contextFiles: string[];
+  tags: string[];
+  links: { label: string; url: string }[];
+  lastBundledAt: number | null;
 }
 
 export interface ProjectIndexEntry {
@@ -44,7 +54,7 @@ export interface ProjectIndexEntry {
 
 // ---- Constants ----
 
-export const VALID_TASK_STATUSES = new Set(['backlog', 'todo', 'in_progress', 'review', 'done']);
+export const VALID_TASK_STATUSES = new Set(['backlog', 'todo', 'in_progress', 'review', 'needs_approval', 'done']);
 export const VALID_PRIORITIES = new Set(['low', 'medium', 'high', 'critical']);
 export const VALID_PROJECT_STATUSES = new Set(['active', 'paused', 'completed', 'archived']);
 

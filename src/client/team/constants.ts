@@ -86,6 +86,7 @@ export const TASK_COLUMNS = [
   { status: 'todo' as const, label: 'To Do', color: '#a78bfa' },
   { status: 'in_progress' as const, label: 'In Progress', color: '#60a5fa' },
   { status: 'review' as const, label: 'Review', color: '#fbbf24' },
+  { status: 'needs_approval' as const, label: 'Needs Approval', color: '#fb923c' },
   { status: 'done' as const, label: 'Done', color: '#34d399' },
 ];
 
