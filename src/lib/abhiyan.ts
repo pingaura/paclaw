@@ -117,7 +117,7 @@ function normalizeTask(raw: Record<string, unknown>): Task {
     assignedAgents: Array.isArray(raw.assignedAgents) ? raw.assignedAgents : [],
     pipelineStage: (raw.pipelineStage as number) ?? null,
     branch: (raw.branch as string) ?? null,
-    approvalRequired: (raw.approvalRequired as boolean) ?? false,
+    approvalRequired: raw.approvalRequired === true || raw.approvalRequired === 'true',
     createdAt: (raw.createdAt as number) || Date.now(),
     updatedAt: (raw.updatedAt as number) || Date.now(),
     completedAt: (raw.completedAt as number) ?? null,

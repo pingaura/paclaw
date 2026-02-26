@@ -67,7 +67,7 @@ node /root/clawd/skills/abhiyan/scripts/abhiyan.cjs tasks delete <projectId> <ta
 
 ## Task Statuses
 
-`backlog` → `todo` → `in_progress` → `review` → `done`
+`backlog` → `todo` → `in_progress` → `review` → `needs_approval` → `done`
 
 ## Task Priorities
 
