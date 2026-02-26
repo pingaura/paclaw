@@ -7,6 +7,7 @@ import type {
   CreateProjectInput,
   CreateTaskInput,
   TaskStatus,
+  DiffSummary,
 } from './types';
 
 const API_BASE = '/api/team';
@@ -90,3 +91,17 @@ export const moveTask = (projectId: string, taskId: string, status: TaskStatus) 
 // Agent messaging
 export const sendAgentMessage = (to: string, message: string) =>
   teamMutate<{ ok: boolean }>('/send-message', 'POST', { to, message });
+
+// Approvals
+export const fetchApprovals = () =>
+  teamRequest<{ task: Task; project: { id: string; name: string; color: string } }[]>('/approvals');
+export const approveTask = (taskId: string, projectId: string) =>
+  teamMutate<{ ok: boolean; task: Task }>(`/approvals/${taskId}/approve`, 'POST', { projectId });
+export const rejectTask = (taskId: string, projectId: string, feedback: string) =>
+  teamMutate<{ ok: boolean; task: Task }>(`/approvals/${taskId}/reject`, 'POST', { projectId, feedback });
+
+// Branches
+export const fetchBranches = (projectId: string) =>
+  teamRequest<{ name: string; current: boolean }[]>(`/projects/${projectId}/branches`);
+export const fetchBranchDiff = (projectId: string, branch: string) =>
+  teamRequest<DiffSummary>(`/projects/${projectId}/diff/${encodeURIComponent(branch)}`);
