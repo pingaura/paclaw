@@ -36,8 +36,11 @@ RUN mkdir -p /root/.openclaw \
 COPY start-openclaw.sh /usr/local/bin/start-openclaw.sh
 RUN chmod +x /usr/local/bin/start-openclaw.sh
 
-# Copy custom skills
+# Copy custom skills to both working dir and a deploy-reference copy.
+# The reference copy survives R2 restore and is re-overlaid at startup
+# so that deploy changes always take precedence over stale R2 data.
 COPY skills/ /root/clawd/skills/
+COPY skills/ /root/clawd/skills-deploy/
 
 # Set working directory
 WORKDIR /root/clawd

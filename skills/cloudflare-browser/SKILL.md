@@ -10,9 +10,15 @@ Control headless browsers via Cloudflare's Browser Rendering service using CDP (
 ## Prerequisites
 
 - `CDP_SECRET` environment variable set
-- Browser profile configured in openclaw.json with `cdpUrl` pointing to the worker endpoint:
+- Browser profile configured in openclaw.json with `cdpUrl` and `attachOnly`:
+
   ```json
   "browser": {
+    "enabled": true,
+    "attachOnly": true,
+    "remoteCdpTimeoutMs": 15000,
+    "remoteCdpHandshakeTimeoutMs": 10000,
+    "defaultProfile": "cloudflare",
     "profiles": {
       "cloudflare": {
         "cdpUrl": "https://your-worker.workers.dev/cdp?secret=..."
@@ -20,6 +26,8 @@ Control headless browsers via Cloudflare's Browser Rendering service using CDP (
     }
   }
   ```
+
+**Note:** `attachOnly: true` is required in headless/container environments. Without it, OpenClaw scans for local Chrome/Brave/Edge binaries and fails with "No supported browser found".
 
 ## Quick Start
 

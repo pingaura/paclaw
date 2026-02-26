@@ -91,6 +91,17 @@ if r2_configured; then
         echo "Skills restored"
     fi
 
+    # Re-overlay deploy-baked skills so new deploys always win over stale R2 data.
+    # R2 may have older versions of SKILL.md / scripts; the Docker image is the
+    # source of truth for skill code. Runtime-only files from R2 (not in the
+    # Docker image) are preserved since cp --no-clobber is NOT used.
+    DEPLOY_SKILLS="/root/clawd/skills-deploy"
+    if [ -d "$DEPLOY_SKILLS" ]; then
+        echo "Overlaying deploy-baked skills over R2 restore..."
+        cp -r "$DEPLOY_SKILLS"/* "$SKILLS_DIR/" 2>/dev/null || true
+        echo "Deploy skills overlay complete"
+    fi
+
     # Restore abhiyan project data
     REMOTE_AB_COUNT=$(rclone ls "r2:${R2_BUCKET}/abhiyan/" $RCLONE_FLAGS 2>/dev/null | wc -l)
     if [ "$REMOTE_AB_COUNT" -gt 0 ]; then
@@ -305,8 +316,13 @@ if (process.env.CDP_SECRET && process.env.WORKER_URL) {
     }
 
     // Browser profile for remote CDP
+    // attachOnly: true prevents OpenClaw from scanning for local Chrome/Brave/Edge
+    // binaries and forces it to use the remote cdpUrl instead.
     config.browser = config.browser || {};
     if (config.browser.enabled === undefined) config.browser.enabled = true;
+    config.browser.attachOnly = true;
+    config.browser.remoteCdpTimeoutMs = 15000;
+    config.browser.remoteCdpHandshakeTimeoutMs = 10000;
     config.browser.ssrfPolicy = config.browser.ssrfPolicy || {};
     config.browser.ssrfPolicy.dangerouslyAllowPrivateNetwork = true;
     config.browser.defaultProfile = config.browser.defaultProfile || 'cloudflare';
