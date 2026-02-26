@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Project } from '../types';
 
 interface ProjectSettingsProps {
@@ -14,6 +14,8 @@ export default function ProjectSettings({ project, onUpdate }: ProjectSettingsPr
   const [links, setLinks] = useState<{ label: string; url: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setTechStack(project.techStack?.join(', ') ?? '');
@@ -22,6 +24,14 @@ export default function ProjectSettings({ project, onUpdate }: ProjectSettingsPr
     setTags(project.tags?.join(', ') ?? '');
     setLinks(project.links?.length ? project.links.map((l) => ({ ...l })) : []);
   }, [project]);
+
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) {
+        clearTimeout(savedTimerRef.current);
+      }
+    };
+  }, []);
 
   const parseCommaSeparated = (value: string): string[] =>
     value
@@ -46,6 +56,7 @@ export default function ProjectSettings({ project, onUpdate }: ProjectSettingsPr
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
+    setError(null);
     try {
       await onUpdate({
         techStack: parseCommaSeparated(techStack),
@@ -55,7 +66,12 @@ export default function ProjectSettings({ project, onUpdate }: ProjectSettingsPr
         links: links.filter((l) => l.label.trim() || l.url.trim()),
       });
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      if (savedTimerRef.current) {
+        clearTimeout(savedTimerRef.current);
+      }
+      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -63,6 +79,8 @@ export default function ProjectSettings({ project, onUpdate }: ProjectSettingsPr
 
   return (
     <div className="ab-settings">
+      {error && <div className="ab-settings-error">{error}</div>}
+
       {/* Read-only info */}
       <div className="ab-settings-info">
         <div className="ab-settings-info-row">

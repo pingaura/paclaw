@@ -127,13 +127,13 @@ export default function ApprovalQueue() {
       <h2 className="ab-section-title">Pending Approvals</h2>
 
       {error && (
-        <div className="ab-approval-error" style={{ color: '#ef4444', marginBottom: 12, fontSize: 13 }}>
+        <div className="ab-approval-error">
           {error}
         </div>
       )}
 
       {approvals.length === 0 ? (
-        <div className="ab-approval-empty" style={{ color: '#94a3b8', padding: '24px 0', textAlign: 'center', fontSize: 14 }}>
+        <div className="ab-approval-empty">
           No pending approvals
         </div>
       ) : (
@@ -142,72 +142,43 @@ export default function ApprovalQueue() {
             <div
               key={task.id}
               className="ab-approval-card"
-              style={{
-                border: '1px solid #334155',
-                borderRadius: 8,
-                padding: 16,
-                marginBottom: 12,
-                backgroundColor: '#1e293b',
-              }}
             >
               {/* Header: priority badge + title */}
-              <div className="ab-approval-header" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div className="ab-approval-header">
                 <span
                   className="ab-priority-badge"
                   style={{
-                    display: 'inline-block',
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
                     backgroundColor: PRIORITY_COLORS[task.priority] + '22',
                     color: PRIORITY_COLORS[task.priority],
                   }}
                 >
                   {task.priority}
                 </span>
-                <span className="ab-approval-title" style={{ fontWeight: 600, fontSize: 14, color: '#f1f5f9' }}>
+                <span className="ab-approval-title">
                   {task.title}
                 </span>
               </div>
 
               {/* Meta: project + branch */}
-              <div className="ab-approval-meta" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, fontSize: 12, color: '#94a3b8' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div className="ab-approval-meta">
+                <span className="ab-approval-meta-project">
                   <span
                     className="ab-project-dot"
-                    style={{
-                      display: 'inline-block',
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      backgroundColor: project.color,
-                    }}
+                    style={{ backgroundColor: project.color }}
                   />
                   {project.name}
                 </span>
                 {task.branch && (
-                  <span style={{ fontFamily: 'monospace', fontSize: 11, backgroundColor: '#0f172a', padding: '1px 6px', borderRadius: 3 }}>
+                  <span className="ab-approval-branch">
                     {task.branch}
                   </span>
                 )}
               </div>
 
               {/* Actions */}
-              <div className="ab-approval-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="ab-approval-actions">
                 <button
                   className="ab-btn ab-btn-approve"
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 6,
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    backgroundColor: '#166534',
-                    color: '#bbf7d0',
-                  }}
                   disabled={card.actionLoading === task.id}
                   onClick={() => handleApprove(task.id, project.id)}
                 >
@@ -215,16 +186,6 @@ export default function ApprovalQueue() {
                 </button>
                 <button
                   className="ab-btn ab-btn-reject"
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 6,
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    backgroundColor: '#7f1d1d',
-                    color: '#fecaca',
-                  }}
                   disabled={card.actionLoading === task.id}
                   onClick={() => toggleReject(task.id)}
                 >
@@ -233,16 +194,6 @@ export default function ApprovalQueue() {
                 {task.branch && (
                   <button
                     className="ab-btn ab-btn-diff"
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: 6,
-                      border: '1px solid #475569',
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      backgroundColor: 'transparent',
-                      color: '#94a3b8',
-                    }}
                     onClick={() => toggleDiff(task.id, project.id, task.branch)}
                   >
                     {card.diffId === task.id ? 'Hide Diff' : 'View Diff'}
@@ -252,54 +203,23 @@ export default function ApprovalQueue() {
 
               {/* Reject feedback textarea */}
               {card.rejectingId === task.id && (
-                <div className="ab-reject-form" style={{ marginTop: 12 }}>
+                <div className="ab-reject-form">
                   <textarea
                     className="ab-reject-textarea"
-                    style={{
-                      width: '100%',
-                      minHeight: 80,
-                      padding: 8,
-                      borderRadius: 6,
-                      border: '1px solid #475569',
-                      backgroundColor: '#0f172a',
-                      color: '#f1f5f9',
-                      fontSize: 13,
-                      resize: 'vertical',
-                      fontFamily: 'inherit',
-                    }}
                     placeholder="Reason for rejection..."
                     value={card.rejectFeedback}
                     onChange={(e) => setCard((prev) => ({ ...prev, rejectFeedback: e.target.value }))}
                   />
-                  <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                  <div className="ab-reject-form-actions">
                     <button
                       className="ab-btn ab-btn-reject-submit"
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: 6,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        backgroundColor: '#991b1b',
-                        color: '#fecaca',
-                      }}
                       disabled={!card.rejectFeedback.trim() || card.actionLoading === task.id}
                       onClick={() => handleRejectSubmit(task.id, project.id)}
                     >
                       {card.actionLoading === task.id ? 'Rejecting...' : 'Submit Rejection'}
                     </button>
                     <button
-                      className="ab-btn"
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: 6,
-                        border: '1px solid #475569',
-                        cursor: 'pointer',
-                        fontSize: 12,
-                        backgroundColor: 'transparent',
-                        color: '#94a3b8',
-                      }}
+                      className="ab-btn ab-btn-cancel"
                       onClick={() => toggleReject(task.id)}
                     >
                       Cancel
@@ -310,33 +230,17 @@ export default function ApprovalQueue() {
 
               {/* Diff viewer */}
               {card.diffId === task.id && (
-                <div className="ab-diff-viewer" style={{ marginTop: 12 }}>
+                <div className="ab-approval-diff-viewer">
                   {card.diffLoading ? (
-                    <div style={{ color: '#94a3b8', fontSize: 12, padding: 8 }}>Loading diff...</div>
+                    <div className="ab-approval-diff-loading">Loading diff...</div>
                   ) : card.diffData ? (
                     <>
-                      <div className="ab-diff-stats" style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
+                      <div className="ab-approval-diff-stats">
                         <span>{card.diffData.filesChanged} file{card.diffData.filesChanged !== 1 ? 's' : ''} changed</span>
-                        <span style={{ color: '#4ade80', marginLeft: 8 }}>+{card.diffData.insertions}</span>
-                        <span style={{ color: '#f87171', marginLeft: 4 }}>-{card.diffData.deletions}</span>
+                        <span className="ab-approval-diff-add">+{card.diffData.insertions}</span>
+                        <span className="ab-approval-diff-del">-{card.diffData.deletions}</span>
                       </div>
-                      <pre
-                        className="ab-diff-patch"
-                        style={{
-                          backgroundColor: '#0f172a',
-                          color: '#e2e8f0',
-                          padding: 12,
-                          borderRadius: 6,
-                          fontSize: 12,
-                          lineHeight: 1.5,
-                          fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                          overflow: 'auto',
-                          maxHeight: 400,
-                          whiteSpace: 'pre',
-                          border: '1px solid #334155',
-                          margin: 0,
-                        }}
-                      >
+                      <pre className="ab-approval-diff-patch">
                         {card.diffData.patch || 'No patch data available'}
                       </pre>
                     </>
