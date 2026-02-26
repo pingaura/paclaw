@@ -66,6 +66,10 @@ The CLI outputs "Approved" (capital A). Use case-insensitive checks:
 stdout.toLowerCase().includes('approved')
 ```
 
+## Deployment
+
+Pushing to `main` triggers automatic deployment via GitHub Actions. There is no separate staging step — changes go live within minutes of push.
+
 ## Commands
 
 ```bash
