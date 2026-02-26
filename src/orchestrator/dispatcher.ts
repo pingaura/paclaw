@@ -67,28 +67,107 @@ export async function dispatchTask(
 
 /**
  * Build the message that gets sent to the agent.
- * Instructions are kept minimal — each agent's AGENTS.md has role-specific
- * orchestrator handling rules.
+ * Includes git context, project setup, and workflow instructions.
  */
 function buildTaskMessage(task: Task, _agentId: AgentId, project: Project): string {
   const priorityLabel = task.priority.charAt(0).toUpperCase() + task.priority.slice(1);
   const moveCmd = `node skills/abhiyan/scripts/abhiyan.cjs tasks move ${project.id} ${task.id}`;
-  return [
+
+  const sections = [
     `## Orchestrator Task Assignment`,
     ``,
     `**Project**: ${project.name} (ID: ${project.id})`,
     `**Task**: ${task.title} (ID: ${task.id})`,
     `**Priority**: ${priorityLabel}`,
+    `**Branch**: ${task.branch || 'none'}`,
+  ];
+
+  // Setup section with git checkout
+  if (task.branch && project.repoPath) {
+    sections.push(
+      ``,
+      `### Setup`,
+      '```bash',
+      `cd ${project.repoPath} && git checkout ${task.branch}`,
+      '```',
+    );
+  }
+
+  // Project context
+  if (project.techStack?.length || project.contextFiles?.length || project.instructions) {
+    sections.push(``, `### Project Context`);
+    if (project.techStack?.length) {
+      sections.push(`**Tech Stack**: ${project.techStack.join(', ')}`);
+    }
+    if (project.contextFiles?.length) {
+      sections.push(`**Key Files to Read First**:`);
+      for (const f of project.contextFiles) {
+        sections.push(`- ${f}`);
+      }
+    }
+    if (project.instructions) {
+      sections.push(``, `### Project Instructions`, project.instructions);
+    }
+  }
+
+  sections.push(
     ``,
     `### Description`,
     task.description || '_No description provided_',
     ``,
+    `### Git Workflow`,
+    `- Work on your assigned branch only`,
+    `- Commit frequently with descriptive messages`,
+    `- When done: \`${moveCmd} --status review\``,
+    `- Do NOT merge to main — the orchestrator handles merges`,
+    ``,
     `### Status Commands`,
-    `- Move to done: \`${moveCmd} --status done\``,
     `- Move to review: \`${moveCmd} --status review\``,
     `- Move back to todo: \`${moveCmd} --status todo\``,
     ``,
     `Follow your Orchestrator Tasks instructions in AGENTS.md for this task.`,
+  );
+
+  return sections.join('\n');
+}
+
+/**
+ * Build a code review message for Sentinel.
+ * Includes the diff, review checklist, and action commands.
+ */
+export function buildReviewMessage(
+  task: Task,
+  project: Project,
+  diff: { filesChanged: number; insertions: number; deletions: number; patch: string },
+): string {
+  const moveCmd = `node skills/abhiyan/scripts/abhiyan.cjs tasks move ${project.id} ${task.id}`;
+  return [
+    `## Code Review Assignment`,
+    ``,
+    `**Project**: ${project.name} (ID: ${project.id})`,
+    `**Task**: ${task.title} (ID: ${task.id})`,
+    `**Branch**: ${task.branch}`,
+    `**Changes**: +${diff.insertions} -${diff.deletions} across ${diff.filesChanged} files`,
+    ``,
+    `### Diff`,
+    '```diff',
+    diff.patch,
+    '```',
+    ``,
+    `### Review Checklist`,
+    `- Code correctness and edge cases`,
+    `- Follows project conventions`,
+    `- No security vulnerabilities`,
+    `- Adequate error handling`,
+    ``,
+    `### Actions`,
+    task.approvalRequired
+      ? `- Approve: \`${moveCmd} --status needs_approval\``
+      : `- Approve: \`${moveCmd} --status done\``,
+    `- Request changes: \`${moveCmd} --status todo\``,
+    `  (Add feedback as a comment before moving back)`,
+    ``,
+    `Follow your Code Review instructions in AGENTS.md.`,
   ].join('\n');
 }
 

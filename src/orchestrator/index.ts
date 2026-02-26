@@ -11,7 +11,8 @@
 import type { Sandbox } from '@cloudflare/sandbox';
 import type { MoltbotEnv } from '../types';
 import type { Task } from '../lib/abhiyan';
-import { getIndex, getProject, listTasks, getTask, saveTask } from '../lib/abhiyan';
+import { getIndex, getProject, listTasks, getTask, saveTask, saveProject } from '../lib/abhiyan';
+import { createBranch, bundleRepo, mergeBranch, getBranchDiff, repoExists, initRepo } from '../lib/git-service';
 import { ensureMoltbotGateway } from '../gateway';
 import { AGENT_IDS, resolveAgent } from './agent-router';
 import { dispatchTask } from './dispatcher';
@@ -58,13 +59,21 @@ export async function saveOrchestratorState(bucket: R2Bucket, state: Orchestrato
 function createDefaultState(): OrchestratorState {
   const agents: Record<string, AgentState> = {};
   for (const id of AGENT_IDS) {
-    agents[id] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null };
+    agents[id] = {
+      status: 'idle',
+      currentTaskId: null,
+      currentProjectId: null,
+      taskStartedAt: null,
+      currentBranch: null,
+    };
   }
   return {
     enabled: true,
     agents,
     lastRunAt: 0,
     lastDispatchAt: null,
+    lastBundleRunAt: null,
+    cycleCount: 0,
   };
 }
 
@@ -88,7 +97,7 @@ export async function runOrchestrationCycle(sandbox: Sandbox, env: MoltbotEnv): 
   // Ensure all agents exist in state
   for (const id of AGENT_IDS) {
     if (!state.agents[id]) {
-      state.agents[id] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null };
+      state.agents[id] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null, currentBranch: null };
     }
   }
 
@@ -138,7 +147,23 @@ export async function runOrchestrationCycle(sandbox: Sandbox, env: MoltbotEnv): 
       const project = await getProject(bucket, projectId);
       if (!project) continue;
 
-      console.log(`[Orchestrator] Dispatching "${task.title}" to ${agentId}`);
+      // Ensure repo exists before dispatching
+      try {
+        const hasRepo = await repoExists(sandbox, project);
+        if (!hasRepo) {
+          console.log(`[Orchestrator] Initializing repo for project ${project.name}`);
+          await initRepo(sandbox, project);
+        }
+
+        // Create a task branch
+        const branch = await createBranch(sandbox, project, task);
+        task.branch = branch;
+      } catch (err) {
+        console.log(`[Orchestrator] Git setup failed for task "${task.title}" (${projectName}): ${err}`);
+        continue; // Skip this task, try again next cycle
+      }
+
+      console.log(`[Orchestrator] Dispatching "${task.title}" to ${agentId} on branch ${task.branch}`);
       const ok = await dispatchTask(sandbox, env, task, agentId, project);
 
       if (ok) {
@@ -147,11 +172,33 @@ export async function runOrchestrationCycle(sandbox: Sandbox, env: MoltbotEnv): 
           currentTaskId: task.id,
           currentProjectId: projectId,
           taskStartedAt: Date.now(),
+          currentBranch: task.branch,
         };
         state.lastDispatchAt = Date.now();
         console.log(`[Orchestrator] ${agentId} is now busy with task ${task.id} (${projectName})`);
       }
     }
+  }
+
+  // Phase 5: Bundle sync (every 5th cycle)
+  state.cycleCount = (state.cycleCount || 0) + 1;
+  if (state.cycleCount % 5 === 0) {
+    const index = await getIndex(bucket);
+    for (const entry of index.filter(e => e.status === 'active')) {
+      const project = await getProject(bucket, entry.id);
+      if (!project) continue;
+      const hasRepo = await repoExists(sandbox, project);
+      if (!hasRepo) continue;
+      try {
+        await bundleRepo(sandbox, env, project);
+        project.lastBundledAt = Date.now();
+        project.updatedAt = Date.now();
+        await saveProject(bucket, project);
+      } catch (err) {
+        console.log(`Bundle failed for ${project.name}: ${err}`);
+      }
+    }
+    state.lastBundleRunAt = Date.now();
   }
 
   state.lastRunAt = Date.now();
@@ -169,7 +216,7 @@ async function reconcileBusyAgents(bucket: R2Bucket, state: OrchestratorState): 
     if (!agentState || agentState.status !== 'busy') continue;
     if (!agentState.currentTaskId || !agentState.currentProjectId) {
       // Invalid busy state — reset
-      state.agents[agentId] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null };
+      state.agents[agentId] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null, currentBranch: null };
       continue;
     }
 
@@ -178,13 +225,27 @@ async function reconcileBusyAgents(bucket: R2Bucket, state: OrchestratorState): 
     if (!task) {
       // Task deleted — mark idle
       console.log(`[Orchestrator] Task ${agentState.currentTaskId} no longer exists, marking ${agentId} idle`);
-      state.agents[agentId] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null };
+      state.agents[agentId] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null, currentBranch: null };
       continue;
     }
 
-    if (task.status === 'done' || task.status === 'review') {
-      console.log(`[Orchestrator] Task ${task.id} is ${task.status}, marking ${agentId} idle`);
-      state.agents[agentId] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null };
+    if (task.status === 'review') {
+      // Agent finished work, task moves to review — release the agent (Sentinel dispatch handled separately)
+      console.log(`[Orchestrator] Task ${task.id} is in review, marking ${agentId} idle`);
+      state.agents[agentId] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null, currentBranch: null };
+      continue;
+    }
+
+    if (task.status === 'needs_approval') {
+      // Waiting for human approval — release the agent
+      console.log(`[Orchestrator] Task ${task.id} needs approval, marking ${agentId} idle`);
+      state.agents[agentId] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null, currentBranch: null };
+      continue;
+    }
+
+    if (task.status === 'done') {
+      console.log(`[Orchestrator] Task ${task.id} is done, marking ${agentId} idle`);
+      state.agents[agentId] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null, currentBranch: null };
       continue;
     }
 
@@ -194,7 +255,7 @@ async function reconcileBusyAgents(bucket: R2Bucket, state: OrchestratorState): 
       task.status = 'todo';
       task.updatedAt = Date.now();
       await saveTask(bucket, agentState.currentProjectId, task);
-      state.agents[agentId] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null };
+      state.agents[agentId] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null, currentBranch: null };
     }
   }
 }
