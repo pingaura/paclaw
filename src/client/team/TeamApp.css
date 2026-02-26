@@ -1441,3 +1441,342 @@
     padding: 0.5rem;
   }
 }
+
+/* ---- Project Settings ---- */
+.ab-settings {
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.ab-settings-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-color);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.ab-settings-info-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.ab-settings-info-label {
+  color: var(--text-muted);
+  font-weight: 500;
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.ab-settings-info-value {
+  color: var(--text-primary);
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.ab-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ab-settings-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.ab-settings-input {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.ab-settings-input:focus {
+  outline: none;
+  border-color: #60a5fa;
+}
+
+.ab-settings-textarea {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.ab-settings-textarea:focus {
+  outline: none;
+  border-color: #60a5fa;
+}
+
+.ab-settings-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.ab-settings-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.ab-settings-link-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.ab-settings-link-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.ab-settings-link-url {
+  flex: 2;
+  min-width: 0;
+}
+
+.ab-settings-link-remove {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.ab-settings-link-remove:hover {
+  color: var(--error-color);
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.ab-settings-link-add {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 0.3rem 0.6rem;
+  border: 1px dashed var(--border-color);
+  background: none;
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.ab-settings-link-add:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-secondary);
+}
+
+.ab-settings-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ab-settings-save {
+  padding: 0.45rem 1rem;
+  background-color: #60a5fa;
+  color: #fff;
+  border: 1px solid #60a5fa;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.ab-settings-save:hover {
+  background-color: #3b82f6;
+}
+
+.ab-settings-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Branches View ---- */
+.ab-branches {
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 1.25rem;
+}
+
+.ab-branches-loading,
+.ab-branches-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 2rem 1rem;
+  font-size: 0.9rem;
+}
+
+.ab-branches-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ab-branch-row-wrapper {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ab-branch-row-wrapper:last-child {
+  border-bottom: none;
+}
+
+.ab-branch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  transition: background-color 0.15s;
+}
+
+.ab-branch-row:hover {
+  background-color: var(--surface-hover);
+}
+
+.ab-branch-row-current {
+  background-color: rgba(52, 211, 153, 0.06);
+}
+
+.ab-branch-row-current:hover {
+  background-color: rgba(52, 211, 153, 0.1);
+}
+
+.ab-branch-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.ab-branch-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #34d399;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+}
+
+.ab-branch-name {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ab-branch-diff-btn {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border-color);
+  background: none;
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  transition: border-color 0.2s, color 0.2s, background-color 0.2s;
+}
+
+.ab-branch-diff-btn:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-secondary);
+}
+
+.ab-branch-diff-btn-active {
+  border-color: #60a5fa;
+  color: #60a5fa;
+  background-color: rgba(96, 165, 250, 0.08);
+}
+
+.ab-diff-panel {
+  padding: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.ab-diff-loading {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 1rem;
+}
+
+.ab-diff-stats {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background-color: var(--bg-color);
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.ab-diff-stat-add {
+  color: #34d399;
+  font-weight: 600;
+}
+
+.ab-diff-stat-del {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.ab-diff-stat-files {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ab-diff-patch {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  font-family: monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  overflow: auto;
+  max-height: 400px;
+  margin: 0;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.ab-diff-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 1rem;
+}
