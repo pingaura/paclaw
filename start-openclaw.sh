@@ -21,6 +21,9 @@ SKILLS_DIR="/root/clawd/skills"
 ABHIYAN_DIR="/root/clawd/abhiyan"
 RCLONE_CONF="/root/.config/rclone/rclone.conf"
 LAST_SYNC_FILE="/tmp/.last-sync"
+PROJECTS_DIR="/root/clawd/projects"
+
+mkdir -p "$PROJECTS_DIR"
 
 echo "Config directory: $CONFIG_DIR"
 
@@ -95,6 +98,39 @@ if r2_configured; then
         mkdir -p "$ABHIYAN_DIR"
         rclone copy "r2:${R2_BUCKET}/abhiyan/" "$ABHIYAN_DIR/" $RCLONE_FLAGS -v 2>&1 || echo "WARNING: abhiyan restore failed with exit code $?"
         echo "Abhiyan data restored"
+    fi
+
+    # ── Restore project git repos from R2 bundles ──
+    echo "Checking for project repo bundles..."
+    BUNDLE_LIST=$(rclone lsf "r2:${R2_BUCKET}/repos/" $RCLONE_FLAGS 2>/dev/null || echo "")
+    if [ -n "$BUNDLE_LIST" ]; then
+        echo "$BUNDLE_LIST" | while IFS= read -r project_dir; do
+            project_id="${project_dir%/}"
+            [ -z "$project_id" ] && continue
+            REPO_DIR="/root/clawd/projects/$project_id"
+            BUNDLE_TMP="/tmp/${project_id}.bundle"
+            echo "Restoring repo: $project_id"
+            rclone copy "r2:${R2_BUCKET}/repos/${project_id}/repo.bundle" /tmp/ $RCLONE_FLAGS \
+                --include="repo.bundle" 2>/dev/null || {
+                    echo "WARNING: Failed to download bundle for $project_id"
+                    continue
+                }
+            if [ -f "$BUNDLE_TMP" ]; then
+                rm -rf "$REPO_DIR"
+                mkdir -p "$REPO_DIR"
+                git clone "$BUNDLE_TMP" "$REPO_DIR" 2>/dev/null || {
+                    echo "WARNING: Failed to clone bundle for $project_id"
+                    rm -f "$BUNDLE_TMP"
+                    continue
+                }
+                cd "$REPO_DIR" && git config user.email "abhiyan@local" && git config user.name "Abhiyan"
+                rm -f "$BUNDLE_TMP"
+                echo "Restored: $project_id"
+            fi
+        done
+        echo "Repo restore complete"
+    else
+        echo "No repo bundles found in R2"
     fi
 else
     echo "R2 not configured, starting fresh"
