@@ -85,6 +85,45 @@ export function generateId(): string {
   return id;
 }
 
+// ---- Normalization helpers (backfill missing fields for old records) ----
+
+function normalizeProject(raw: Record<string, unknown>): Project {
+  return {
+    id: raw.id as string,
+    name: raw.name as string,
+    description: (raw.description as string) || '',
+    status: (raw.status as Project['status']) || 'active',
+    color: (raw.color as string) || '#60a5fa',
+    createdAt: (raw.createdAt as number) || Date.now(),
+    updatedAt: (raw.updatedAt as number) || Date.now(),
+    repoPath: (raw.repoPath as string) || `/root/clawd/projects/${raw.id}`,
+    defaultBranch: (raw.defaultBranch as string) || 'main',
+    techStack: Array.isArray(raw.techStack) ? raw.techStack : [],
+    instructions: (raw.instructions as string) || '',
+    contextFiles: Array.isArray(raw.contextFiles) ? raw.contextFiles : [],
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    links: Array.isArray(raw.links) ? raw.links : [],
+    lastBundledAt: (raw.lastBundledAt as number) ?? null,
+  };
+}
+
+function normalizeTask(raw: Record<string, unknown>): Task {
+  return {
+    id: raw.id as string,
+    title: (raw.title as string) || '',
+    description: (raw.description as string) || '',
+    status: (raw.status as Task['status']) || 'backlog',
+    priority: (raw.priority as Task['priority']) || 'medium',
+    assignedAgents: Array.isArray(raw.assignedAgents) ? raw.assignedAgents : [],
+    pipelineStage: (raw.pipelineStage as number) ?? null,
+    branch: (raw.branch as string) ?? null,
+    approvalRequired: (raw.approvalRequired as boolean) ?? false,
+    createdAt: (raw.createdAt as number) || Date.now(),
+    updatedAt: (raw.updatedAt as number) || Date.now(),
+    completedAt: (raw.completedAt as number) ?? null,
+  };
+}
+
 // ---- R2 helpers ----
 
 export async function getIndex(bucket: R2Bucket): Promise<ProjectIndexEntry[]> {
@@ -102,7 +141,7 @@ export async function saveIndex(bucket: R2Bucket, index: ProjectIndexEntry[]): P
 export async function getProject(bucket: R2Bucket, id: string): Promise<Project | null> {
   const obj = await bucket.get(projectPath(id));
   if (!obj) return null;
-  return obj.json<Project>();
+  return normalizeProject(await obj.json());
 }
 
 export async function saveProject(bucket: R2Bucket, project: Project): Promise<void> {
@@ -114,7 +153,7 @@ export async function saveProject(bucket: R2Bucket, project: Project): Promise<v
 export async function getTask(bucket: R2Bucket, projectId: string, taskId: string): Promise<Task | null> {
   const obj = await bucket.get(taskPath(projectId, taskId));
   if (!obj) return null;
-  return obj.json<Task>();
+  return normalizeTask(await obj.json());
 }
 
 export async function saveTask(bucket: R2Bucket, projectId: string, task: Task): Promise<void> {
@@ -150,7 +189,7 @@ export async function listTasks(bucket: R2Bucket, projectId: string): Promise<Ta
     keys.map(async (key) => {
       const r2obj = await bucket.get(key);
       if (!r2obj) return null;
-      return r2obj.json<Task>();
+      return normalizeTask(await r2obj.json());
     }),
   );
 
