@@ -483,4 +483,8 @@ teamApi.route('/projects', projectsApi);
 import { orchestratorApi } from './orchestrator-api';
 teamApi.route('/orchestrator', orchestratorApi);
 
+// Mount approvals sub-routes
+import { approvalsApi } from './approvals-api';
+teamApi.route('/approvals', approvalsApi);
+
 export { teamApi };

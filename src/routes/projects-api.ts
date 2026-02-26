@@ -19,6 +19,7 @@ import {
   VALID_PROJECT_STATUSES,
 } from '../lib/abhiyan';
 import { runOrchestrationCycle } from '../orchestrator';
+import { listBranches, getBranchDiff, repoExists } from '../lib/git-service';
 
 /** Trigger orchestration in the background (non-blocking, best-effort) */
 function triggerOrchestration(c: Context<AppEnv>) {
@@ -316,6 +317,32 @@ projectsApi.patch('/:id/tasks/:taskId/move', async (c) => {
   }
 
   return c.json(task);
+});
+
+// GET /:id/branches - List branches for a project
+projectsApi.get('/:id/branches', async (c) => {
+  const bucket = c.env.MOLTBOT_BUCKET;
+  const sandbox = c.get('sandbox');
+  const project = await getProject(bucket, c.req.param('id'));
+  if (!project) return c.json({ error: 'Project not found' }, 404);
+
+  const exists = await repoExists(sandbox, project);
+  if (!exists) return c.json([]);
+
+  const branches = await listBranches(sandbox, project);
+  return c.json(branches);
+});
+
+// GET /:id/diff/:branch - Get diff for a branch
+projectsApi.get('/:id/diff/:branch', async (c) => {
+  const bucket = c.env.MOLTBOT_BUCKET;
+  const sandbox = c.get('sandbox');
+  const project = await getProject(bucket, c.req.param('id'));
+  if (!project) return c.json({ error: 'Project not found' }, 404);
+
+  const branch = decodeURIComponent(c.req.param('branch'));
+  const diff = await getBranchDiff(sandbox, project, branch);
+  return c.json(diff);
 });
 
 export { projectsApi };
