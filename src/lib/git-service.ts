@@ -58,13 +58,19 @@ async function execInContainer(
   timeout = 30_000,
 ): Promise<string> {
   const result = await sandbox.exec(`sh -c '${command.replace(/'/g, "'\\''")}'`, { timeout });
-  if (result.stdout === undefined && result.stderr) {
-    throw new Error(`Command failed: ${command}\nstderr: ${result.stderr}`);
+
+  // Primary guard: check exitCode if the sandbox exposes it
+  if ('exitCode' in result && (result as { exitCode: number }).exitCode !== 0) {
+    throw new Error(
+      `Command failed (exit ${(result as { exitCode: number }).exitCode}): ${result.stderr || 'unknown error'}`,
+    );
   }
-  // Some sandbox implementations use a success flag
+
+  // Secondary guard: check success flag
   if ('success' in result && result.success === false) {
-    throw new Error(`Command failed: ${command}\nstderr: ${result.stderr || '(no stderr)'}`);
+    throw new Error(`Command failed: ${result.stderr || 'unknown error'}`);
   }
+
   return (result.stdout || '').trim();
 }
 
@@ -77,15 +83,15 @@ async function execInContainer(
 export async function initRepo(sandbox: Sandbox, project: Project): Promise<void> {
   const { repoPath, defaultBranch } = project;
 
-  await execInContainer(sandbox, `mkdir -p ${repoPath}`);
-  await execInContainer(sandbox, `cd ${repoPath} && git init -b ${defaultBranch}`);
-  await execInContainer(sandbox, `cd ${repoPath} && git config user.email "abhiyan@local"`);
-  await execInContainer(sandbox, `cd ${repoPath} && git config user.name "Abhiyan"`);
-  await execInContainer(
-    sandbox,
-    `cd ${repoPath} && echo "# ${project.name}" > README.md`,
-  );
-  await execInContainer(sandbox, `cd ${repoPath} && git add -A && git commit -m "Initial commit"`);
+  await execInContainer(sandbox, `mkdir -p "${repoPath}"`);
+  await execInContainer(sandbox, `cd "${repoPath}" && git init -b "${defaultBranch}"`);
+  await execInContainer(sandbox, `cd "${repoPath}" && git config user.email "abhiyan@local"`);
+  await execInContainer(sandbox, `cd "${repoPath}" && git config user.name "Abhiyan"`);
+
+  // Write README via sandbox.writeFile to avoid shell injection through project.name
+  await sandbox.writeFile(repoPath + '/README.md', `# ${project.name}\n`);
+
+  await execInContainer(sandbox, `cd "${repoPath}" && git add -A && git commit -m "Initial commit"`);
 }
 
 /**
@@ -101,8 +107,8 @@ export async function createBranch(
   const branchName = `task/${task.id}-${slug}`;
   const { repoPath, defaultBranch } = project;
 
-  await execInContainer(sandbox, `cd ${repoPath} && git checkout ${defaultBranch}`);
-  await execInContainer(sandbox, `cd ${repoPath} && git checkout -b ${branchName}`);
+  await execInContainer(sandbox, `cd "${repoPath}" && git checkout "${defaultBranch}"`);
+  await execInContainer(sandbox, `cd "${repoPath}" && git checkout -b "${branchName}"`);
 
   return branchName;
 }
@@ -122,7 +128,7 @@ export async function getBranchDiff(
   // numstat gives per-file insertions/deletions
   const numstat = await execInContainer(
     sandbox,
-    `cd ${repoPath} && git diff --numstat ${defaultBranch}...${branch}`,
+    `cd "${repoPath}" && git diff --numstat "${defaultBranch}...${branch}"`,
   );
 
   const files: DiffResult['files'] = [];
@@ -145,7 +151,7 @@ export async function getBranchDiff(
   // Full patch, capped at ~50 KB
   const patch = await execInContainer(
     sandbox,
-    `cd ${repoPath} && git diff ${defaultBranch}...${branch} | head -c 51200`,
+    `cd "${repoPath}" && git diff "${defaultBranch}...${branch}" | head -c 51200`,
   );
 
   return {
@@ -169,14 +175,14 @@ export async function mergeBranch(
   const { repoPath, defaultBranch } = project;
 
   try {
-    await execInContainer(sandbox, `cd ${repoPath} && git checkout ${defaultBranch}`);
-    await execInContainer(sandbox, `cd ${repoPath} && git merge --no-ff ${branch}`);
-    await execInContainer(sandbox, `cd ${repoPath} && git branch -d ${branch}`);
+    await execInContainer(sandbox, `cd "${repoPath}" && git checkout "${defaultBranch}"`);
+    await execInContainer(sandbox, `cd "${repoPath}" && git merge --no-ff "${branch}"`);
+    await execInContainer(sandbox, `cd "${repoPath}" && git branch -d "${branch}"`);
     return { success: true };
   } catch (err) {
     // Attempt to abort the failed merge
     try {
-      await execInContainer(sandbox, `cd ${repoPath} && git merge --abort`);
+      await execInContainer(sandbox, `cd "${repoPath}" && git merge --abort`);
     } catch {
       // merge --abort may fail if merge never started; ignore
     }
@@ -199,7 +205,7 @@ export async function bundleRepo(
   const tmpPath = `/tmp/${project.id}.bundle`;
 
   // Create git bundle containing all refs
-  await execInContainer(sandbox, `cd ${repoPath} && git bundle create ${tmpPath} --all`);
+  await execInContainer(sandbox, `cd "${repoPath}" && git bundle create "${tmpPath}" --all`);
 
   // Read the bundle file from the container as base64
   const bundleResult = await sandbox.readFile(tmpPath, { encoding: 'base64' });
@@ -229,7 +235,7 @@ export async function bundleRepo(
 
   // Clean up temp file
   try {
-    await execInContainer(sandbox, `rm -f ${tmpPath}`);
+    await execInContainer(sandbox, `rm -f "${tmpPath}"`);
   } catch {
     // Non-fatal — temp file cleanup is best-effort
   }
@@ -267,15 +273,15 @@ export async function restoreRepo(
   await sandbox.writeFile(tmpPath, base64Content, { encoding: 'base64' });
 
   // Clone from the bundle into the project's repoPath
-  await execInContainer(sandbox, `git clone ${tmpPath} ${repoPath}`);
+  await execInContainer(sandbox, `git clone "${tmpPath}" "${repoPath}"`);
 
   // Configure git user inside the restored repo
-  await execInContainer(sandbox, `cd ${repoPath} && git config user.email "abhiyan@local"`);
-  await execInContainer(sandbox, `cd ${repoPath} && git config user.name "Abhiyan"`);
+  await execInContainer(sandbox, `cd "${repoPath}" && git config user.email "abhiyan@local"`);
+  await execInContainer(sandbox, `cd "${repoPath}" && git config user.name "Abhiyan"`);
 
   // Clean up temp file
   try {
-    await execInContainer(sandbox, `rm -f ${tmpPath}`);
+    await execInContainer(sandbox, `rm -f "${tmpPath}"`);
   } catch {
     // Non-fatal
   }
@@ -294,18 +300,18 @@ export async function getRepoStatus(
 
   const currentBranch = await execInContainer(
     sandbox,
-    `cd ${repoPath} && git branch --show-current`,
+    `cd "${repoPath}" && git branch --show-current`,
   );
 
   const branchOutput = await execInContainer(
     sandbox,
-    `cd ${repoPath} && git branch --format="%(refname:short)"`,
+    `cd "${repoPath}" && git branch --format="%(refname:short)"`,
   );
   const branches = branchOutput ? branchOutput.split('\n').filter(Boolean) : [];
 
   const porcelain = await execInContainer(
     sandbox,
-    `cd ${repoPath} && git status --porcelain`,
+    `cd "${repoPath}" && git status --porcelain`,
   );
   const uncommittedChanges = porcelain.length > 0;
 
@@ -321,7 +327,7 @@ export async function getLog(
   limit = 10,
 ): Promise<string> {
   const { repoPath } = project;
-  return execInContainer(sandbox, `cd ${repoPath} && git log --oneline -${limit}`);
+  return execInContainer(sandbox, `cd "${repoPath}" && git log --oneline -${limit}`);
 }
 
 /**
@@ -335,7 +341,7 @@ export async function listBranches(
 
   const output = await execInContainer(
     sandbox,
-    `cd ${repoPath} && git branch --format="%(HEAD) %(refname:short)"`,
+    `cd "${repoPath}" && git branch --format="%(HEAD) %(refname:short)"`,
   );
 
   if (!output) return [];
@@ -354,7 +360,7 @@ export async function repoExists(sandbox: Sandbox, project: Project): Promise<bo
   try {
     const result = await execInContainer(
       sandbox,
-      `test -d ${project.repoPath}/.git && echo yes || echo no`,
+      `test -d "${project.repoPath}/.git" && echo yes || echo no`,
     );
     return result === 'yes';
   } catch {
