@@ -11,16 +11,11 @@ interface BranchItem {
   current: boolean;
 }
 
-/** Extended diff that includes the raw patch text from the API */
-interface DiffWithPatch extends DiffSummary {
-  patch?: string;
-}
-
 export default function BranchesView({ projectId }: BranchesViewProps) {
   const [branches, setBranches] = useState<BranchItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedBranch, setExpandedBranch] = useState<string | null>(null);
-  const [diff, setDiff] = useState<DiffWithPatch | null>(null);
+  const [diff, setDiff] = useState<DiffSummary | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
 
   useEffect(() => {
@@ -61,8 +56,7 @@ export default function BranchesView({ projectId }: BranchesViewProps) {
 
     try {
       const result = await fetchBranchDiff(projectId, branchName);
-      // The API returns patch but the type may not declare it
-      setDiff(result as DiffWithPatch);
+      setDiff(result);
     } catch {
       setDiff(null);
     } finally {

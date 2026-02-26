@@ -13,7 +13,7 @@ interface CardState {
   rejectFeedback: string;
   diffId: string | null;
   diffLoading: boolean;
-  diffData: (DiffSummary & { patch?: string }) | null;
+  diffData: DiffSummary | null;
   actionLoading: string | null;
 }
 
@@ -103,7 +103,7 @@ export default function ApprovalQueue() {
     setCard((prev) => ({ ...prev, diffId: taskId, diffLoading: true, diffData: null }));
     try {
       const data = await fetchBranchDiff(projectId, branch);
-      setCard((prev) => ({ ...prev, diffLoading: false, diffData: data as DiffSummary & { patch?: string } }));
+      setCard((prev) => ({ ...prev, diffLoading: false, diffData: data }));
     } catch (err) {
       setCard((prev) => ({
         ...prev,

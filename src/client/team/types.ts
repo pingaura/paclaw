@@ -146,12 +146,11 @@ export interface DiffSummary {
   filesChanged: number;
   insertions: number;
   deletions: number;
-  files: string[];
+  files: { path: string; insertions: number; deletions: number }[];
+  patch: string;
 }
 
 export interface BranchInfo {
   name: string;
   current: boolean;
-  lastCommit: string;
-  lastCommitAt: number;
 }

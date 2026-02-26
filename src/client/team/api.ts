@@ -96,7 +96,7 @@ export const sendAgentMessage = (to: string, message: string) =>
 export const fetchApprovals = () =>
   teamRequest<{ task: Task; project: { id: string; name: string; color: string } }[]>('/approvals');
 export const approveTask = (taskId: string, projectId: string) =>
-  teamMutate<{ ok: boolean; task: Task }>(`/approvals/${taskId}/approve`, 'POST', { projectId });
+  teamMutate<Task>(`/approvals/${taskId}/approve`, 'POST', { projectId });
 export const rejectTask = (taskId: string, projectId: string, feedback: string) =>
   teamMutate<{ ok: boolean; task: Task }>(`/approvals/${taskId}/reject`, 'POST', { projectId, feedback });
 

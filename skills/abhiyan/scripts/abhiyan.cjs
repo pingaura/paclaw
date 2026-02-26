@@ -260,7 +260,7 @@ function tasksCreate(projectId, flags) {
     assignedAgents: flags.assignedAgents ? flags.assignedAgents.split(',') : [],
     pipelineStage: flags.pipelineStage ? parseInt(flags.pipelineStage, 10) : null,
     branch: null,
-    approvalRequired: flags['approval-required'] === true || flags.priority === 'critical',
+    approvalRequired: flags['approval-required'] === true || flags['approval-required'] === 'true' || flags.priority === 'critical',
     createdAt: now,
     updatedAt: now,
     completedAt: null,
@@ -354,6 +354,7 @@ function tasksDelete(projectId, taskId) {
 }
 
 function projectsInfo(projectId) {
+  if (!projectId) { console.error('Usage: abhiyan projects info <projectId>'); process.exit(1); }
   const project = getProject(projectId);
   if (!project) { console.error(`Project not found: ${projectId}`); process.exit(1); }
   console.log(`Name: ${project.name}`);
@@ -367,14 +368,15 @@ function projectsInfo(projectId) {
 }
 
 function gitStatus(projectId) {
+  if (!projectId) { console.error('Usage: abhiyan git status <projectId>'); process.exit(1); }
   const project = getProject(projectId);
   if (!project) { console.error(`Project not found: ${projectId}`); process.exit(1); }
   if (!project.repoPath) { console.error('No repo configured for this project'); process.exit(1); }
   const { execSync } = require('child_process');
   try {
-    const branch = execSync(`cd ${project.repoPath} && git branch --show-current`, { encoding: 'utf8' }).trim();
-    const status = execSync(`cd ${project.repoPath} && git status --short`, { encoding: 'utf8' }).trim();
-    const log = execSync(`cd ${project.repoPath} && git log --oneline -5`, { encoding: 'utf8' }).trim();
+    const branch = execSync('git branch --show-current', { cwd: project.repoPath, encoding: 'utf8' }).trim();
+    const status = execSync('git status --short', { cwd: project.repoPath, encoding: 'utf8' }).trim();
+    const log = execSync('git log --oneline -5', { cwd: project.repoPath, encoding: 'utf8' }).trim();
     console.log(`Branch: ${branch}`);
     console.log(`Changes:\n${status || '(clean)'}`);
     console.log(`Recent commits:\n${log}`);
@@ -385,12 +387,13 @@ function gitStatus(projectId) {
 }
 
 function gitBranches(projectId) {
+  if (!projectId) { console.error('Usage: abhiyan git branches <projectId>'); process.exit(1); }
   const project = getProject(projectId);
   if (!project) { console.error(`Project not found: ${projectId}`); process.exit(1); }
   if (!project.repoPath) { console.error('No repo configured for this project'); process.exit(1); }
   const { execSync } = require('child_process');
   try {
-    const output = execSync(`cd ${project.repoPath} && git branch -v`, { encoding: 'utf8' }).trim();
+    const output = execSync('git branch -v', { cwd: project.repoPath, encoding: 'utf8' }).trim();
     console.log(output);
   } catch (err) {
     console.error(`Git error: ${err.message}`);
@@ -456,7 +459,7 @@ function main() {
         process.exit(1);
     }
   } else {
-    console.error(`Unknown resource: ${resource}. Use "projects" or "tasks".`);
+    console.error(`Unknown resource: ${resource}. Use "projects", "tasks", or "git".`);
     process.exit(1);
   }
 }
