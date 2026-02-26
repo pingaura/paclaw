@@ -102,7 +102,7 @@ if r2_configured; then
 
     # ── Restore project git repos from R2 bundles ──
     echo "Checking for project repo bundles..."
-    BUNDLE_LIST=$(rclone lsf "r2:${R2_BUCKET}/repos/" $RCLONE_FLAGS 2>/dev/null || echo "")
+    BUNDLE_LIST=$(rclone lsf --dirs-only "r2:${R2_BUCKET}/repos/" $RCLONE_FLAGS 2>/dev/null || echo "")
     if [ -n "$BUNDLE_LIST" ]; then
         echo "$BUNDLE_LIST" | while IFS= read -r project_dir; do
             project_id="${project_dir%/}"
@@ -110,8 +110,7 @@ if r2_configured; then
             REPO_DIR="/root/clawd/projects/$project_id"
             BUNDLE_TMP="/tmp/${project_id}.bundle"
             echo "Restoring repo: $project_id"
-            rclone copy "r2:${R2_BUCKET}/repos/${project_id}/repo.bundle" /tmp/ $RCLONE_FLAGS \
-                --include="repo.bundle" 2>/dev/null || {
+            rclone copyto "r2:${R2_BUCKET}/repos/${project_id}/repo.bundle" "$BUNDLE_TMP" $RCLONE_FLAGS 2>/dev/null || {
                     echo "WARNING: Failed to download bundle for $project_id"
                     continue
                 }
@@ -123,7 +122,9 @@ if r2_configured; then
                     rm -f "$BUNDLE_TMP"
                     continue
                 }
-                cd "$REPO_DIR" && git config user.email "abhiyan@local" && git config user.name "Abhiyan"
+                git -C "$REPO_DIR" remote remove origin 2>/dev/null || true
+                git -C "$REPO_DIR" config user.email "abhiyan@local"
+                git -C "$REPO_DIR" config user.name "Abhiyan"
                 rm -f "$BUNDLE_TMP"
                 echo "Restored: $project_id"
             fi
