@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useTeamStatus } from './hooks/useTeamStatus';
 import { useProjects } from './hooks/useProjects';
@@ -10,8 +10,11 @@ import PipelineView from './components/PipelineView';
 import ActivityFeed from './components/ActivityFeed';
 import AgentChatInput from './components/AgentChatInput';
 import ConnectionStatus from './components/ConnectionStatus';
+import ApprovalQueue from './components/ApprovalQueue';
+import BranchesView from './components/BranchesView';
+import ProjectSettings from './components/ProjectSettings';
 import { AGENT_MAP } from './constants';
-import { getTeamActivity } from './api';
+import { getTeamActivity, updateProject } from './api';
 import type { ActivityItem } from './types';
 import './TeamApp.css';
 
@@ -28,6 +31,8 @@ export default function TeamApp() {
   const [activityOpen, setActivityOpen] = useState(true);
   const [pipelineOpen, setPipelineOpen] = useState(false);
   const [chatActivities, setChatActivities] = useState<ActivityItem[]>([]);
+  const [projectTab, setProjectTab] = useState<'tasks' | 'branches' | 'settings'>('tasks');
+  const [showApprovals, setShowApprovals] = useState(false);
 
   // Pagination state for "Load older"
   const [olderActivities, setOlderActivities] = useState<ActivityItem[]>([]);
@@ -35,6 +40,11 @@ export default function TeamApp() {
   const [nextCursorId, setNextCursorId] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // Reset tab to 'tasks' when active project changes
+  useEffect(() => {
+    setProjectTab('tasks');
+  }, [activeProject?.id]);
 
   const handleChatSend = useCallback((item: ActivityItem) => {
     setChatActivities((prev) => [...prev, item]);
@@ -114,7 +124,15 @@ export default function TeamApp() {
           </div>
           <ConnectionStatus connected={connected} error={wsError} />
         </div>
-        <AgentStatusBar agentStates={agentStates} />
+        <div className="ab-header-right">
+          <button
+            className={`ab-header-btn ${showApprovals ? 'active' : ''}`}
+            onClick={() => setShowApprovals(!showApprovals)}
+          >
+            Approvals
+          </button>
+          <AgentStatusBar agentStates={agentStates} />
+        </div>
       </header>
 
       {/* Alerts */}
@@ -137,13 +155,47 @@ export default function TeamApp() {
           {activeProject ? (
             <>
               <ProjectHeader project={activeProject} />
-              <TaskBoard
-                tasks={activeProject.tasks}
-                onCreateTask={createTask}
-                onUpdateTask={updateTask}
-                onMoveTask={moveTask}
-                onDeleteTask={deleteTask}
-              />
+              <div className="ab-project-tabs">
+                <button
+                  className={`ab-tab ${projectTab === 'tasks' ? 'active' : ''}`}
+                  onClick={() => setProjectTab('tasks')}
+                >
+                  Tasks
+                </button>
+                <button
+                  className={`ab-tab ${projectTab === 'branches' ? 'active' : ''}`}
+                  onClick={() => setProjectTab('branches')}
+                >
+                  Branches
+                </button>
+                <button
+                  className={`ab-tab ${projectTab === 'settings' ? 'active' : ''}`}
+                  onClick={() => setProjectTab('settings')}
+                >
+                  Settings
+                </button>
+              </div>
+              {projectTab === 'tasks' && (
+                <TaskBoard
+                  tasks={activeProject.tasks}
+                  onCreateTask={createTask}
+                  onUpdateTask={updateTask}
+                  onMoveTask={moveTask}
+                  onDeleteTask={deleteTask}
+                />
+              )}
+              {projectTab === 'branches' && (
+                <BranchesView projectId={activeProject.id} />
+              )}
+              {projectTab === 'settings' && (
+                <ProjectSettings
+                  project={activeProject}
+                  onUpdate={async (changes) => {
+                    await updateProject(activeProject.id, changes);
+                    selectProject(activeProject.id);
+                  }}
+                />
+              )}
             </>
           ) : (
             <div className="ab-empty">
@@ -181,6 +233,17 @@ export default function TeamApp() {
         </button>
         {pipelineOpen && <PipelineView agentStates={agentStates} />}
       </div>
+
+      {/* Approvals side panel */}
+      {showApprovals && (
+        <div className="ab-approvals-panel">
+          <div className="ab-approvals-header">
+            <h3>Pending Approvals</h3>
+            <button onClick={() => setShowApprovals(false)}>Close</button>
+          </div>
+          <ApprovalQueue />
+        </div>
+      )}
     </div>
   );
 }

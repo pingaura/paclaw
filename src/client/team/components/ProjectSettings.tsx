@@ -6,7 +6,7 @@ interface ProjectSettingsProps {
   onUpdate: (changes: Partial<Project>) => Promise<void>;
 }
 
-export default function ProjectSettings({ project, onUpdate }: ProjectSettingsProps): JSX.Element {
+export default function ProjectSettings({ project, onUpdate }: ProjectSettingsProps) {
   const [techStack, setTechStack] = useState('');
   const [instructions, setInstructions] = useState('');
   const [contextFiles, setContextFiles] = useState('');
