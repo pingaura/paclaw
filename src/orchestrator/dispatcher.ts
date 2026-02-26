@@ -172,14 +172,14 @@ export function buildReviewMessage(
 }
 
 /**
- * Send a task to an agent via the OpenClaw gateway WebSocket.
+ * Send a message to an agent via the OpenClaw gateway WebSocket.
+ * Shared helper used by both task dispatch and review dispatch.
  */
-async function sendTaskViaWebSocket(
+async function sendMessageViaWebSocket(
   sandbox: Sandbox,
   env: MoltbotEnv,
-  task: Task,
-  agentId: AgentId,
-  project: Project,
+  to: string,
+  message: string,
 ): Promise<void> {
   // Build the WebSocket URL with token
   const wsUrl = new URL('http://localhost/');
@@ -238,6 +238,8 @@ async function sendTaskViaWebSocket(
     // Protocol v3: wait for connect.challenge event; fallback if challenge is delayed
     const challengeTimer = setTimeout(() => sendConnect(), 750);
 
+    const msgId = `msg-${Date.now()}`;
+
     ws.addEventListener('message', (event) => {
       try {
         const msg = JSON.parse(typeof event.data === 'string' ? event.data : '');
@@ -259,22 +261,19 @@ async function sendTaskViaWebSocket(
           }
           connected = true;
 
-          // Send the task dispatch message
+          // Send the message
           const dispatchMsg = {
             type: 'req',
-            id: `task-${Date.now()}`,
+            id: msgId,
             method: 'sessions.send',
-            params: {
-              to: agentId,
-              message: buildTaskMessage(task, agentId, project),
-            },
+            params: { to, message },
           };
           ws.send(JSON.stringify(dispatchMsg));
           return;
         }
 
         // Wait for sessions.send response
-        if (connected && msg.type === 'res' && msg.id?.startsWith('task-')) {
+        if (connected && msg.type === 'res' && msg.id === msgId) {
           clearTimeout(timeout);
           ws.close(1000, 'done');
           if (msg.error) {
@@ -302,4 +301,40 @@ async function sendTaskViaWebSocket(
       reject(new Error('WebSocket error'));
     });
   });
+}
+
+/**
+ * Send a task to an agent via the OpenClaw gateway WebSocket.
+ */
+async function sendTaskViaWebSocket(
+  sandbox: Sandbox,
+  env: MoltbotEnv,
+  task: Task,
+  agentId: AgentId,
+  project: Project,
+): Promise<void> {
+  const message = buildTaskMessage(task, agentId, project);
+  return sendMessageViaWebSocket(sandbox, env, agentId, message);
+}
+
+/**
+ * Dispatch a review to Sentinel via WebSocket.
+ * Lightweight — does not modify task status or write to the filesystem.
+ */
+export async function dispatchReview(
+  sandbox: Sandbox,
+  env: MoltbotEnv,
+  task: Task,
+  project: Project,
+  diff: { filesChanged: number; insertions: number; deletions: number; patch: string },
+): Promise<boolean> {
+  const message = buildReviewMessage(task, project, diff);
+  try {
+    await sendMessageViaWebSocket(sandbox, env, 'sentinel', message);
+    console.log(`[Orchestrator] Dispatched review for task "${task.title}" (${task.id}) to sentinel`);
+    return true;
+  } catch (err) {
+    console.error('[Orchestrator] Failed to send review to Sentinel:', err);
+    return false;
+  }
 }

@@ -15,7 +15,7 @@ import { getIndex, getProject, listTasks, getTask, saveTask, saveProject } from 
 import { createBranch, bundleRepo, mergeBranch, getBranchDiff, repoExists, initRepo } from '../lib/git-service';
 import { ensureMoltbotGateway } from '../gateway';
 import { AGENT_IDS, resolveAgent } from './agent-router';
-import { dispatchTask } from './dispatcher';
+import { dispatchTask, dispatchReview } from './dispatcher';
 import type { AgentState, OrchestratorState } from './types';
 
 export type { AgentState, OrchestratorState } from './types';
@@ -102,7 +102,7 @@ export async function runOrchestrationCycle(sandbox: Sandbox, env: MoltbotEnv): 
   }
 
   // Phase 1: Check busy agents — release those whose tasks are done/review or timed out
-  await reconcileBusyAgents(bucket, state);
+  await reconcileBusyAgents(bucket, state, sandbox, env);
 
   // Phase 2: Collect all todo tasks across active projects
   const todoTasks = await collectTodoTasks(bucket);
@@ -210,7 +210,7 @@ export async function runOrchestrationCycle(sandbox: Sandbox, env: MoltbotEnv): 
  * Check each busy agent's task status. Release agents whose tasks moved to done/review
  * or have been running longer than the timeout.
  */
-async function reconcileBusyAgents(bucket: R2Bucket, state: OrchestratorState): Promise<void> {
+async function reconcileBusyAgents(bucket: R2Bucket, state: OrchestratorState, sandbox: Sandbox, env: MoltbotEnv): Promise<void> {
   for (const agentId of AGENT_IDS) {
     const agentState = state.agents[agentId];
     if (!agentState || agentState.status !== 'busy') continue;
@@ -230,9 +230,20 @@ async function reconcileBusyAgents(bucket: R2Bucket, state: OrchestratorState): 
     }
 
     if (task.status === 'review') {
-      // Agent finished work, task moves to review — release the agent (Sentinel dispatch handled separately)
       console.log(`[Orchestrator] Task ${task.id} is in review, marking ${agentId} idle`);
       state.agents[agentId] = { status: 'idle', currentTaskId: null, currentProjectId: null, taskStartedAt: null, currentBranch: null };
+
+      // Dispatch Sentinel for code review
+      const project = await getProject(bucket, agentState.currentProjectId);
+      if (project && task.branch) {
+        try {
+          const diff = await getBranchDiff(sandbox, project, task.branch);
+          await dispatchReview(sandbox, env, task, project, diff);
+          console.log(`[Orchestrator] Dispatched Sentinel review for task ${task.id}`);
+        } catch (err) {
+          console.log(`[Orchestrator] Failed to dispatch Sentinel review: ${err}`);
+        }
+      }
       continue;
     }
 
