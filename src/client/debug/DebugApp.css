@@ -222,3 +222,17 @@ body {
 .dc-text-warn { color: var(--dc-orange); }
 .dc-text-info { color: var(--dc-blue); }
 .dc-text-dim { color: var(--dc-text-dim); }
+
+/* CRT glow on output areas */
+.dc-output {
+  text-shadow: 0 0 2px rgba(0, 255, 65, 0.15);
+}
+
+/* Blinking cursor for inputs */
+.dc-input-bar input {
+  animation: dc-cursor-blink 1.2s step-end infinite;
+}
+
+@keyframes dc-cursor-blink {
+  50% { caret-color: transparent; }
+}
