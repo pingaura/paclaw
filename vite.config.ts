@@ -12,6 +12,7 @@ export default defineConfig({
 					input: {
 						admin: resolve(__dirname, "index.html"),
 						team: resolve(__dirname, "team.html"),
+						debug: resolve(__dirname, "debug.html"),
 					},
 				},
 			},

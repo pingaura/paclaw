@@ -76,4 +76,12 @@ publicRoutes.get('/_team/assets/*', async (c) => {
   return c.env.ASSETS.fetch(new Request(assetUrl.toString(), c.req.raw));
 });
 
+// GET /_debug/assets/* - Debug Console static assets
+publicRoutes.get('/_debug/assets/*', async (c) => {
+  const url = new URL(c.req.url);
+  const assetPath = url.pathname.replace('/_debug/assets/', '/assets/');
+  const assetUrl = new URL(assetPath, url.origin);
+  return c.env.ASSETS.fetch(new Request(assetUrl.toString(), c.req.raw));
+});
+
 export { publicRoutes };
