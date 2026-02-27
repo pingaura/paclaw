@@ -221,16 +221,25 @@ app.route('/_admin', adminUi);
 // Mount Team Dashboard UI routes (protected by Cloudflare Access)
 app.route('/_team', teamUi);
 
-// Mount Debug Console UI (protected by Cloudflare Access)
-app.route('/_debug', debugUi);
-
-// Mount debug routes (protected by Cloudflare Access, only when DEBUG_ROUTES is enabled)
+// Mount debug routes and UI (protected by Cloudflare Access, only when DEBUG_ROUTES is enabled)
 app.use('/debug/*', async (c, next) => {
   if (c.env.DEBUG_ROUTES !== 'true') {
     return c.json({ error: 'Debug routes are disabled' }, 404);
   }
   return next();
 });
+const debugUiGate = async (c: { env: MoltbotEnv }, next: () => Promise<void | Response>) => {
+  if (c.env.DEBUG_ROUTES !== 'true') {
+    return new Response(JSON.stringify({ error: 'Debug routes are disabled' }), {
+      status: 404,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+  return next();
+};
+app.use('/_debug', debugUiGate);
+app.use('/_debug/*', debugUiGate);
+app.route('/_debug', debugUi);
 app.route('/debug', debug);
 
 // =============================================================================
